@@ -18,26 +18,32 @@
       [(eq? var (caar state)) #t]
       [else                   (instate? var (cons (cdar state) (cdr state)))])))
 
+;; removes variable/state pair from state
+(define remove-acc
+  (lambda (var state acc)
+    (cond
+      [(null?                 (car state)) acc]
+      [(eq? var (caar state)) (remove-acc var (list (cdar state) (cdadr state)) acc)]
+      [else                   (remove-acc var (list (cdar state) (cdadr state)) (list (cons (caar state) (car acc)) (cons (caadr state) (cadr acc))))])))
+
 ;;;; ******************************************************************************************
 ;;;;   end of helper methods
 ;;;; ******************************************************************************************
 
        
-;; Code a function that can take an expression of numbers and operators and return the value
-;; '(3 + (6 / 2))
-;; '((4 + 5) - (7 * 10))
-;; '(1 + 2)
+;; takes an expression of numbers/variables and operators and returns the value
 ;; The operators are +, -, *, /, % and division is integer division
 (define m-value
-  (lambda (exp)
+  (lambda (exp state)
     (cond
       [(null? exp) (error 'undefined "undefined expression")]
       [(number? exp) exp]
-      [(eq? (operator exp) '+) (+ (m-value (left-operand exp)) (m-value (right-operand exp)))]
-      [(eq? (operator exp) '-) (- (m-value (left-operand exp)) (m-value (right-operand exp)))]
-      [(eq? (operator exp) '*) (* (m-value (left-operand exp)) (m-value (right-operand exp)))]
-      [(eq? (operator exp) '/) (quotient (m-value (left-operand exp)) (m-value (right-operand exp)))]
-      [(eq? (operator exp) '%) (remainder (m-value (left-operand exp)) (m-value (right-operand exp)))])))
+      [(instate? exp state) (get exp state)]
+      [(eq? (operator exp) '+) (+ (m-value (left-operand exp) state) (m-value (right-operand exp) state))]
+      [(eq? (operator exp) '-) (- (m-value (left-operand exp) state) (m-value (right-operand exp) state))]
+      [(eq? (operator exp) '*) (* (m-value (left-operand exp) state) (m-value (right-operand exp) state))]
+      [(eq? (operator exp) '/) (quotient (m-value (left-operand exp) state) (m-value (right-operand exp) state))]
+      [(eq? (operator exp) '%) (remainder (m-value (left-operand exp) state) (m-value (right-operand exp) state))])))
 
 (define operator car)
 (define left-operand cadr)
@@ -56,25 +62,11 @@
   (lambda (var state)
     (remove-acc var state init-state)))
 
-(define remove-acc
-  (lambda (var state acc)
-    (cond
-      [(null?                 (car state)) acc]
-      [(eq? var (caar state)) (remove-acc var (list (cdar state) (cdadr state)) acc)]
-      [else                   (remove-acc var (list (cdar state) (cdadr state)) (list (cons (caar state) (car acc)) (cons (caadr state) (cadr acc))))])))
-
-;; NOT DONE
-(define m-name
-  (lambda (exp)
-    (cond
-      [(null? exp) (error 'error "no expression")]
-      [else (m-value exp)])))
-
 ;; NOT DONE
 (define m-bool
-  (lambda (exp)
+  (lambda (exp state)
     (cond
-      [(null? exp) (error 'error "no expression")]
+      [(null? exp) (error 'error "undefined expression")]
       [else 0])))
 
 ;; gets value of a variable from state
