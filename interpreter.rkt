@@ -1,11 +1,16 @@
 #lang racket
 (require "simpleParser.rkt")
-
+;;;; ******************************************************************************************
+;;;;   Intepreter, part 1
+;;;;   EECS 345
+;;;;   Sherry Chen, Chris Toomey
+;;;; ******************************************************************************************
 
 ;;;; ******************************************************************************************
 ;;;;   helper methods
 ;;;; ******************************************************************************************
 
+;; determines if the variable is in state
 (define instate?
   (lambda (var state)
     (cond
@@ -39,35 +44,40 @@
 (define right-operand caddr)
 (define init-state '(() ()))
 
+;; adds variable/value pair to state
 (define add
-  (lambda (name value state)
+  (lambda (var value state)
     (cond
-      [(instate? name state) (error 'error "already in state")]
-      [else                  (list (cons name (car state)) (cons value (cadr state)))])))
+      [(instate? var state) (error 'error "already in state")]
+      [else                 (list (cons var (car state)) (cons value (cadr state)))])))
 
+;; removes variable/value pair from state, wrapper for remove-acc
 (define remove
-  (lambda (name state)
-    (remove-acc name state init-state)))
+  (lambda (var state)
+    (remove-acc var state init-state)))
 
 (define remove-acc
-  (lambda (name state acc)
+  (lambda (var state acc)
     (cond
-      [(null?                  (car state)) acc]
-      [(eq? name (caar state)) (remove-acc name (list (cdar state) (cdadr state)) acc)]
-      [else                    (remove-acc name (list (cdar state) (cdadr state)) (list (cons (caar state) (car acc)) (cons (caadr state) (cadr acc))))])))
-       
+      [(null?                 (car state)) acc]
+      [(eq? var (caar state)) (remove-acc var (list (cdar state) (cdadr state)) acc)]
+      [else                   (remove-acc var (list (cdar state) (cdadr state)) (list (cons (caar state) (car acc)) (cons (caadr state) (cadr acc))))])))
+
+;; NOT DONE
 (define m-name
   (lambda (exp)
     (cond
       [(null? exp) (error 'error "no expression")]
       [else (m-value exp)])))
 
+;; NOT DONE
 (define m-bool
   (lambda (exp)
     (cond
       [(null? exp) (error 'error "no expression")]
       [else 0])))
 
+;; gets value of a variable from state
 (define get
   (lambda (var state)
     (cond
