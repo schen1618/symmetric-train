@@ -34,6 +34,13 @@
       [(eq? var (caar state)) (remove-acc var (list (cdar state) (cdadr state)) acc)]
       [else                   (remove-acc var (list (cdar state) (cdadr state)) (list (cons (caar state) (car acc)) (cons (caadr state) (cadr acc))))])))
 
+;; evaluates an expression
+(define m-eval
+  (lambda (exp state)
+    (cond
+      [(equal? 'invalid_expression (m-bool exp state)) (m-value exp state)]
+      [else                                            (m-bool exp state)])))
+
 ;;;; ******************************************************************************************
 ;;;;   end of helper methods
 ;;;; ******************************************************************************************
@@ -86,7 +93,8 @@
       [(eq? (operator exp) '<=) (<= (m-bool (left-operand exp) state) (m-bool (right-operand exp) state))]
       [(eq? (operator exp) '&&) (and (m-bool (left-operand exp) state) (m-bool (right-operand exp) state))]
       [(eq? (operator exp) '||) (or (m-bool (left-operand exp) state) (m-bool (right-operand exp) state))]
-      [(eq? (operator exp) '!)  (not (m-bool (left-operand exp) state))])))
+      [(eq? (operator exp) '!)  (not (m-bool (left-operand exp) state))]
+      [else 'invalid_expression])))
      
 ;; declares a variable
 (define m-declare
@@ -96,18 +104,13 @@
       [(null? (caddr exp))  (add (cadr exp) 'novalue state)]
       [else (add (cadr exp) (caddr exp) state)])))
 
-;; NOT DONE evaluates and expression
-(define m-eval
-  (lambda (exp)
-    (cond
-      ['0])))
-
-;; NOT DONE
+;; Chris please test
 (define m-assign
   (lambda (exp state)
     (cond
-      [(null? exp) (error 'error "undefined expression")]
-      [else (m-declare (cadr exp) (m-value (caddr exp) state))])))
+      [(null? exp)                 (error 'error "undefined expression")]
+      [(instate? (cadr exp) state) (m-declare (list (car exp) (cadr exp) (m-eval (caddr exp) state)) (remove (cadr exp) state))]
+      [else                        (m-declare (list (car exp) (cadr exp) (m-eval (caddr exp) state)) state)])))
 
 
 
