@@ -126,7 +126,7 @@
 (define m-if
   (lambda (statement state)
     (cond
-      [(null? statement)                  (error 'error "undefined expression")]
+      [(null? statement)                  (error 'error "undefined statement")]
       [(eq? #t (m-bool (cadr statement))) (m-state (caddr statement) state)]
       [(not (null? (cdddr statement)))    (m-state (cadddr statement) state)])))
 
@@ -134,15 +134,10 @@
 (define m-while
   (lambda (statement state)
     (cond
-      [(null? statement) (error 'error "undefined expression")]
-      [(eq? #t (m-bool (cadr statement) state)) (m-while statement (m-state (caddr statement) state)])))
+      [(null? statement) (error 'error "undefined statement")]
+      [(eq? #t (m-bool (cadr statement) state)) (m-while statement (m-state (caddr statement) state))])))
 
-;;
-(define m-state
-  (lambda (statement state)
-    (cond
-      [(null? statement) '0])))
-                      
+
       
                 
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               
