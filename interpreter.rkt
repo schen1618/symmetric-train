@@ -137,7 +137,16 @@
       [(null? statement) (error 'error "undefined statement")]
       [(eq? #t (m-bool (cadr statement) state)) (m-while statement (m-state (caddr statement) state))])))
 
-
+;; m-state 😊
+(define m-state
+  (lambda (statement state)
+    (cond
+      [(eq? (caar statement) 'var) (m-state (cdr statement) (m-declare (car statement) state))]
+      [(eq? (caar statement) '=) (m-state (cdr statement) (m-assign (car statement) state))]
+      [(eq? (caar statement) 'return) (m-return (car statement) state)]
+      [(eq? (caar statement) 'if) (m-state (cdr statement) (m-if (car statement) state))]
+      [(eq? (caar statement) 'while) (m-state (cdr statement) (m-while (car statement) state))]
+      [else error 'error "undefined expression"])))
       
                 
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               
