@@ -18,6 +18,14 @@
       [(eq? var (caar state)) #t]
       [else                   (instate? var (cons (cdar state) (cdr state)))])))
 
+;; gets value of a variable from state
+(define get
+  (lambda (var state)
+    (cond
+      [(null? (car state))    'notfound]
+      [(eq? var (caar state)) (caadr state)]
+      [else                   (get var (list (cdar state) (cdadr state)))])))
+
 ;; removes variable/state pair from state
 (define remove-acc
   (lambda (var state acc)
@@ -30,15 +38,15 @@
 ;;;;   end of helper methods
 ;;;; ******************************************************************************************
 
-       
+;; error for when variable is not found in state?       
 ;; takes an expression of numbers/variables and operators and returns the value
 ;; The operators are +, -, *, /, % and division is integer division
 (define m-value
   (lambda (exp state)
     (cond
-      [(null? exp) (error 'undefined "undefined expression")]
-      [(number? exp) exp]
-      [(instate? exp state) (get exp state)]
+      [(null? exp)             (error 'undefined "undefined expression")]
+      [(number? exp)           exp]
+      [(instate? exp state)    (get exp state)]
       [(eq? (operator exp) '+) (+ (m-value (left-operand exp) state) (m-value (right-operand exp) state))]
       [(eq? (operator exp) '-) (- (m-value (left-operand exp) state) (m-value (right-operand exp) state))]
       [(eq? (operator exp) '*) (* (m-value (left-operand exp) state) (m-value (right-operand exp) state))]
@@ -67,15 +75,23 @@
   (lambda (exp state)
     (cond
       [(null? exp) (error 'error "undefined expression")]
-      [else 0])))
+      [else (m-value exp state)])))
 
-;; gets value of a variable from state
-(define get
-  (lambda (var state)
+;; declares a variable
+(define m-declare
+  (lambda (exp state)
     (cond
-      [(null? (car state))    'valuenotfound]
-      [(eq? var (caar state)) (caadr state)]
-      [else                   (get var (list (cdar state) (cdadr state)))])))
+      [(null? exp)          (error 'error "undefined expression")]
+      [(null? (caddr exp))  (add (cadr exp) 'novalue state)]
+      [else (add (cadr exp) (caddr exp) state)])))
+
+;; NOT DONE
+(define m-assign
+  (lambda (exp state)
+    (cond
+      [(null? exp) (error 'error "undefined expression")]
+      [(m-value exp state)]
+      [else '0])))
 
 
 
