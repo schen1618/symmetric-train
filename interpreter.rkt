@@ -84,6 +84,8 @@
       [(null? exp)              (error 'undefined "undefined expression")]
       [(number? exp)            exp]
       [(instate? exp state)     (get exp state)]
+      [(eq? exp #t)             #t]
+      [(eq? exp #f)             #f]
       [(list? (cadr exp))       (m-value (cadr exp) state)]
       [(eq? (operator exp) '==) (equal? (m-bool (left-operand exp) state) (m-bool (right-operand exp) state))]
       [(eq? (operator exp) '!=) (not (equal? (m-bool (left-operand exp) state) (m-bool (right-operand exp) state)))]
@@ -94,7 +96,7 @@
       [(eq? (operator exp) '&&) (and (m-bool (left-operand exp) state) (m-bool (right-operand exp) state))]
       [(eq? (operator exp) '||) (or (m-bool (left-operand exp) state) (m-bool (right-operand exp) state))]
       [(eq? (operator exp) '!)  (not (m-bool (left-operand exp) state))]
-      [else 'invalid_expression])))
+      [else                     'invalid_expression])))
      
 ;; declares a variable
 (define m-declare
@@ -112,6 +114,12 @@
       [(instate? (cadr exp) state) (m-declare (list (car exp) (cadr exp) (m-eval (caddr exp) state)) (remove (cadr exp) state))]
       [else                        (m-declare (list (car exp) (cadr exp) (m-eval (caddr exp) state)) state)])))
 
+;;
+(define m-return
+  (lambda (exp state)
+    (cond
+      [(null? exp) (error 'error "undefined expression")]
+      [else        (m-eval (cadr exp) state)])))
 
 
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               
