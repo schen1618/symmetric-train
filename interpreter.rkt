@@ -51,14 +51,16 @@
 (define m-value
   (lambda (exp state)
     (cond
-      [(null? exp)             (error 'undefined "undefined expression")]
-      [(number? exp)           exp]
-      [(instate? exp state)    (get exp state)]
-      [(eq? (operator exp) '+) (+ (m-value (left-operand exp) state) (m-value (right-operand exp) state))]
-      [(eq? (operator exp) '-) (- (m-value (left-operand exp) state) (m-value (right-operand exp) state))]
-      [(eq? (operator exp) '*) (* (m-value (left-operand exp) state) (m-value (right-operand exp) state))]
-      [(eq? (operator exp) '/) (quotient (m-value (left-operand exp) state) (m-value (right-operand exp) state))]
-      [(eq? (operator exp) '%) (remainder (m-value (left-operand exp) state) (m-value (right-operand exp) state))])))
+      [(null? exp)              (error 'undefined "undefined expression")]
+      [(number? exp)            exp]
+      [(instate? exp state)     (get exp state)]
+      [(eq? (operator exp) '+)  (+ (m-value (left-operand exp) state) (m-value (right-operand exp) state))]
+      [(and (eq? (operator exp) '-)
+            (null? (cddr exp))) (* (m-value (left-operand exp) state) -1)]
+      [(eq? (operator exp) '-)  (- (m-value (left-operand exp) state) (m-value (right-operand exp) state))]
+      [(eq? (operator exp) '*)  (* (m-value (left-operand exp) state) (m-value (right-operand exp) state))]
+      [(eq? (operator exp) '/)  (quotient (m-value (left-operand exp) state) (m-value (right-operand exp) state))]
+      [(eq? (operator exp) '%)  (remainder (m-value (left-operand exp) state) (m-value (right-operand exp) state))])))
 
 (define operator car)
 (define left-operand cadr)
@@ -86,7 +88,6 @@
       [(instate? exp state)     (get exp state)]
       [(eq? exp #t)             #t]
       [(eq? exp #f)             #f]
-      [(list? (cadr exp))       (m-value (cadr exp) state)]
       [(eq? (operator exp) '==) (equal? (m-bool (left-operand exp) state) (m-bool (right-operand exp) state))]
       [(eq? (operator exp) '!=) (not (equal? (m-bool (left-operand exp) state) (m-bool (right-operand exp) state)))]
       [(eq? (operator exp) '>)  (> (m-bool (left-operand exp) state) (m-bool (right-operand exp) state))]
@@ -103,7 +104,7 @@
   (lambda (exp state)
     (cond
       [(null? exp)          (error 'error "undefined expression")]
-      [(null? (caddr exp))  (add (cadr exp) 'novalue state)]
+      [(null? (cddr exp))   (add (cadr exp) 'novalue state)]
       [else (add (cadr exp) (caddr exp) state)])))
 
 ;; Chris please test
@@ -114,13 +115,35 @@
       [(instate? (cadr exp) state) (m-declare (list (car exp) (cadr exp) (m-eval (caddr exp) state)) (remove (cadr exp) state))]
       [else                        (m-declare (list (car exp) (cadr exp) (m-eval (caddr exp) state)) state)])))
 
-;;
+;; returns an expression, Chris please test but I think it works
 (define m-return
   (lambda (exp state)
     (cond
       [(null? exp) (error 'error "undefined expression")]
       [else        (m-eval (cadr exp) state)])))
 
+;; if statement NOT TESTED YET
+(define m-if
+  (lambda (statement state)
+    (cond
+      [(null? statement)                  (error 'error "undefined expression")]
+      [(eq? #t (m-bool (cadr statement))) (m-state (caddr statement) state)]
+      [(not (null? (cdddr statement)))    (m-state (cadddr statement) state)])))
 
+;; while statement
+(define m-while
+  (lambda (statement state)
+    (cond
+      [(null? statement) (error 'error "undefined expression")]
+      [(eq? #t (m-bool (cadr statement) state)) (m-while statement (m-state (caddr statement) state)])))
+
+;;
+(define m-state
+  (lambda (statement state)
+    (cond
+      [(null? statement) '0])))
+                      
+      
+                
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               
             
