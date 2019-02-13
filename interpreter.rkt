@@ -70,13 +70,24 @@
   (lambda (var state)
     (remove-acc var state init-state)))
 
-;; NOT DONE
+;; Chris please test all conditions thanks
 (define m-bool
   (lambda (exp state)
     (cond
-      [(null? exp) (error 'error "undefined expression")]
-      [else (m-value exp state)])))
-
+      [(null? exp)              (error 'undefined "undefined expression")]
+      [(number? exp)            exp]
+      [(instate? exp state)     (get exp state)]
+      [(list? (cadr exp))       (m-value (cadr exp) state)]
+      [(eq? (operator exp) '==) (equal? (m-bool (left-operand exp) state) (m-bool (right-operand exp) state))]
+      [(eq? (operator exp) '!=) (not (equal? (m-bool (left-operand exp) state) (m-bool (right-operand exp) state)))]
+      [(eq? (operator exp) '>)  (> (m-bool (left-operand exp) state) (m-bool (right-operand exp) state))]
+      [(eq? (operator exp) '>=) (>= (m-bool (left-operand exp) state) (m-bool (right-operand exp) state))]
+      [(eq? (operator exp) '<)  (< (m-bool (left-operand exp) state) (m-bool (right-operand exp) state))]
+      [(eq? (operator exp) '<=) (<= (m-bool (left-operand exp) state) (m-bool (right-operand exp) state))]
+      [(eq? (operator exp) '&&) (and (m-bool (left-operand exp) state) (m-bool (right-operand exp) state))]
+      [(eq? (operator exp) '||) (or (m-bool (left-operand exp) state) (m-bool (right-operand exp) state))]
+      [(eq? (operator exp) '!)  (not (m-bool (left-operand exp) state))])))
+     
 ;; declares a variable
 (define m-declare
   (lambda (exp state)
@@ -85,13 +96,18 @@
       [(null? (caddr exp))  (add (cadr exp) 'novalue state)]
       [else (add (cadr exp) (caddr exp) state)])))
 
+;; NOT DONE evaluates and expression
+(define m-eval
+  (lambda (exp)
+    (cond
+      ['0])))
+
 ;; NOT DONE
 (define m-assign
   (lambda (exp state)
     (cond
       [(null? exp) (error 'error "undefined expression")]
-      [(m-value exp state)]
-      [else '0])))
+      [else (m-declare (cadr exp) (m-value (caddr exp) state))])))
 
 
 
