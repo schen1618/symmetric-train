@@ -53,6 +53,10 @@
     (cond
       [(null? exp)              (error 'undefined "undefined expression")]
       [(number? exp)            exp]
+      [(equal? (get exp state)
+               'novalue)        (error 'error "variable not assigned")]
+      [(and (not (list? exp))
+            (equal? 'notfound (get exp state))) (error 'error "variable not declared")]
       [(instate? exp state)     (get exp state)]
       [(eq? (operator exp) '+)  (+ (m-value (left-operand exp) state) (m-value (right-operand exp) state))]
       [(and (eq? (operator exp) '-)
@@ -71,7 +75,7 @@
 (define add
   (lambda (var value state)
     (cond
-      [(instate? var state) (error 'error "already in state")]
+      [(instate? var state) (error 'error "variable already defined")]
       [else                 (list (cons var (car state)) (cons value (cadr state)))])))
 
 ;; removes variable/value pair from state, wrapper for remove-acc
@@ -88,15 +92,21 @@
       [(instate? exp state)     (get exp state)]
       [(eq? exp #t)             #t]
       [(eq? exp #f)             #f]
-      [(eq? (operator exp) '==) (equal? (m-bool (left-operand exp) state) (m-bool (right-operand exp) state))]
-      [(eq? (operator exp) '!=) (not (equal? (m-bool (left-operand exp) state) (m-bool (right-operand exp) state)))]
-      [(eq? (operator exp) '>)  (> (m-bool (left-operand exp) state) (m-bool (right-operand exp) state))]
-      [(eq? (operator exp) '>=) (>= (m-bool (left-operand exp) state) (m-bool (right-operand exp) state))]
-      [(eq? (operator exp) '<)  (< (m-bool (left-operand exp) state) (m-bool (right-operand exp) state))]
-      [(eq? (operator exp) '<=) (<= (m-bool (left-operand exp) state) (m-bool (right-operand exp) state))]
-      [(eq? (operator exp) '&&) (and (m-bool (left-operand exp) state) (m-bool (right-operand exp) state))]
-      [(eq? (operator exp) '||) (or (m-bool (left-operand exp) state) (m-bool (right-operand exp) state))]
-      [(eq? (operator exp) '!)  (not (m-bool (left-operand exp) state))]
+      [(equal? exp 'true)       #t]
+      [(equal? exp 'false)      #f]
+      [(equal? (get exp state)
+               'novalue)        (error 'error "variable not assigned")]
+      [(and (not (list? exp))
+            (equal? 'notfound (get exp state))) (error 'error "variable not declared")]
+      [(eq? (operator exp) '==) (equal? (m-eval (left-operand exp) state) (m-eval (right-operand exp) state))]
+      [(eq? (operator exp) '!=) (not (equal? (m-eval (left-operand exp) state) (m-eval (right-operand exp) state)))]
+      [(eq? (operator exp) '>)  (> (m-eval (left-operand exp) state) (m-eval (right-operand exp) state))]
+      [(eq? (operator exp) '>=) (>= (m-eval (left-operand exp) state) (m-eval (right-operand exp) state))]
+      [(eq? (operator exp) '<)  (< (m-eval (left-operand exp) state) (m-eval (right-operand exp) state))]
+      [(eq? (operator exp) '<=) (<= (m-eval (left-operand exp) state) (m-eval (right-operand exp) state))]
+      [(eq? (operator exp) '&&) (and (m-eval (left-operand exp) state) (m-eval (right-operand exp) state))]
+      [(eq? (operator exp) '||) (or (m-eval (left-operand exp) state) (m-eval (right-operand exp) state))]
+      [(eq? (operator exp) '!)  (not (m-eval (left-operand exp) state))]
       [else                     'invalid_expression])))
      
 ;; declares a variable
@@ -114,7 +124,7 @@
     (cond
       [(null? exp)                 (error 'error "undefined expression")]
       [(instate? (cadr exp) state) (m-declare (list (car exp) (cadr exp) (m-eval (caddr exp) state)) (remove (cadr exp) state))]
-      [else                        (m-declare (list (car exp) (cadr exp) (m-eval (caddr exp) state)) state)])))
+      [else                        (error 'error "variable not declared")])))
 
 ;; returns an expression, Chris please test but I think it works
 (define m-return
@@ -129,9 +139,9 @@
 (define m-if
   (lambda (statement state)
     (cond
-      [(null? statement)                  (error 'error "undefined statement")]
+      [(null? statement)                        (error 'error "undefined statement")]
       [(eq? #t (m-bool (cadr statement) state)) (m-state (caddr statement) state)]
-      [(not (null? (cdddr statement)))    (m-state (cadddr statement) state)])))
+      [(not (null? (cdddr statement)))          (m-state (cadddr statement) state)])))
 
 ;; while statement
 (define m-while
