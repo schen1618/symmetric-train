@@ -105,7 +105,8 @@
     (cond
       [(null? exp)          (error 'error "undefined expression")]
       [(null? (cddr exp))   (add (cadr exp) 'novalue state)]
-      [else (add (cadr exp) (caddr exp) state)])))
+      [(list? (cddr exp))   (add (cadr exp) (m-eval (caddr exp) state) state)]
+      [else                 (add (cadr exp) (caddr exp) state)])))
 
 ;; Chris please test
 (define m-assign
@@ -120,7 +121,7 @@
   (lambda (exp state)
     (cond
       [(null? exp) (error 'error "undefined expression")]
-      [else        (m-eval (cadr exp) state)])))
+      [else        (add 'return (m-eval (cadr exp) state) state)])))
 
 ;; if statement NOT TESTED YET
 (define m-if
@@ -141,13 +142,24 @@
 (define m-state
   (lambda (statement state)
     (cond
-      [(eq? (caar statement) 'var) (m-state (cdr statement) (m-declare (car statement) state))]
-      [(eq? (caar statement) '=) (m-state (cdr statement) (m-assign (car statement) state))]
-      [(eq? (caar statement) 'return) (m-return (car statement) state)]
-      [(eq? (caar statement) 'if) (m-state (cdr statement) (m-if (car statement) state))]
-      [(eq? (caar statement) 'while) (m-state (cdr statement) (m-while (car statement) state))]
-      [else error 'error "undefined expression"])))
+      [(eq? (car statement) 'var)    (m-declare statement state)]
+      [(eq? (car statement) '=)      (m-assign statement state)]
+      [(eq? (car statement) 'return) (m-return statement state)]
+      [(eq? (car statement) 'if)     (m-if statement state)]
+      [(eq? (car statement) 'while)  (m-while statement state)]
+      [else                          error 'error "undefined expression"])))
+
+;; interpret tree
+(define interpret-tree
+  (lambda (tree state)
+    (cond
+      [(null? tree) (get 'return state)]
+      [(pair? tree) (interpret-tree (cdr tree) (m-state (car tree) state))])))
       
-                
+
+; interpret
+(define interpret
+  (lambda (filename)
+    (interpret-tree (parser filename) init-state)))
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               
             
