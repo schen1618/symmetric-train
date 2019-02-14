@@ -121,6 +121,8 @@
   (lambda (exp state)
     (cond
       [(null? exp) (error 'error "undefined expression")]
+      [(eq? #t (m-eval (cadr exp) state)) (add 'return 'true state)]
+      [(eq? #f (m-eval (cadr exp) state)) (add 'return 'false state)]
       [else        (add 'return (m-eval (cadr exp) state) state)])))
 
 ;; if statement NOT TESTED YET
@@ -128,14 +130,14 @@
   (lambda (statement state)
     (cond
       [(null? statement)                  (error 'error "undefined statement")]
-      [(eq? #t (m-bool (cadr statement))) (m-state (caddr statement) state)]
+      [(eq? #t (m-bool (cadr statement) state)) (m-state (caddr statement) state)]
       [(not (null? (cdddr statement)))    (m-state (cadddr statement) state)])))
 
 ;; while statement
 (define m-while
   (lambda (statement state)
     (cond
-      [(null? statement) (error 'error "undefined statement")]
+      [(null? statement)                        (error 'error "undefined statement")]
       [(eq? #t (m-bool (cadr statement) state)) (m-while statement (m-state (caddr statement) state))])))
 
 ;; m-state 😊
