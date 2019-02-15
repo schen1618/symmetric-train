@@ -6,44 +6,6 @@
 ;;;;   Sherry Chen, Chris Toomey
 ;;;; ******************************************************************************************
 
-;;;; ******************************************************************************************
-;;;;   helper methods
-;;;; ******************************************************************************************
-
-;; determines if the variable is in state
-(define instate?
-  (lambda (var state)
-    (cond
-      [(null? (car state))    #f]
-      [(eq? var (caar state)) #t]
-      [else                   (instate? var (cons (cdar state) (cdr state)))])))
-
-;; gets value of a variable from state
-(define get
-  (lambda (var state)
-    (cond
-      [(null? (car state))    'notfound]
-      [(eq? var (caar state)) (caadr state)]
-      [else                   (get var (list (cdar state) (cdadr state)))])))
-
-;; removes variable/state pair from state
-(define remove-acc
-  (lambda (var state acc)
-    (cond
-      [(null?                 (car state)) acc]
-      [(eq? var (caar state)) (remove-acc var (list (cdar state) (cdadr state)) acc)]
-      [else                   (remove-acc var (list (cdar state) (cdadr state)) (list (cons (caar state) (car acc)) (cons (caadr state) (cadr acc))))])))
-
-;; evaluates an expression
-(define m-eval
-  (lambda (exp state)
-    (cond
-      [(equal? 'invalid_expression (m-bool exp state)) (m-value exp state)]
-      [else                                            (m-bool exp state)])))
-
-;;;; ******************************************************************************************
-;;;;   end of helper methods
-;;;; ******************************************************************************************
 
 ;; error for when variable is not found in state?       
 ;; takes an expression of numbers/variables and operators and returns the value
@@ -135,20 +97,22 @@
       [(eq? #f (m-eval (cadr exp) state)) (add 'return 'false state)]
       [else        (add 'return (m-eval (cadr exp) state) state)])))
 
-;; if statement NOT TESTED YET
+;; if statement
 (define m-if
   (lambda (statement state)
     (cond
       [(null? statement)                        (error 'error "undefined statement")]
       [(eq? #t (m-bool (cadr statement) state)) (m-state (caddr statement) state)]
-      [(not (null? (cdddr statement)))          (m-state (cadddr statement) state)])))
+      [(not (null? (cdddr statement)))          (m-state (cadddr statement) state)]
+      [else                                     state])))
 
 ;; while statement
 (define m-while
   (lambda (statement state)
     (cond
       [(null? statement)                        (error 'error "undefined statement")]
-      [(eq? #t (m-bool (cadr statement) state)) (m-while statement (m-state (caddr statement) state))])))
+      [(eq? #t (m-bool (cadr statement) state)) (m-while statement (m-state (caddr statement) state))]
+      [else                                     state])))
 
 ;; m-state 😊
 (define m-state
@@ -174,4 +138,37 @@
   (lambda (filename)
     (interpret-tree (parser filename) init-state)))
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               
-            
+;;;; ******************************************************************************************
+;;;;   helper methods
+;;;; ******************************************************************************************
+
+;; determines if the variable is in state
+(define instate?
+  (lambda (var state)
+    (cond
+      [(null? (car state))    #f]
+      [(eq? var (caar state)) #t]
+      [else                   (instate? var (cons (cdar state) (cdr state)))])))
+
+;; gets value of a variable from state
+(define get
+  (lambda (var state)
+    (cond
+      [(null? (car state))    'notfound]
+      [(eq? var (caar state)) (caadr state)]
+      [else                   (get var (list (cdar state) (cdadr state)))])))
+
+;; removes variable/state pair from state
+(define remove-acc
+  (lambda (var state acc)
+    (cond
+      [(null?                 (car state)) acc]
+      [(eq? var (caar state)) (remove-acc var (list (cdar state) (cdadr state)) acc)]
+      [else                   (remove-acc var (list (cdar state) (cdadr state)) (list (cons (caar state) (car acc)) (cons (caadr state) (cadr acc))))])))
+
+;; evaluates an expression
+(define m-eval
+  (lambda (exp state)
+    (cond
+      [(equal? 'invalid_expression (m-bool exp state)) (m-value exp state)]
+      [else                                            (m-bool exp state)])))        
