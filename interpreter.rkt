@@ -44,9 +44,9 @@
   (lambda (var value state)
     (cond
       [(instate? var state) (error 'error "variable already defined")]
-      [else                 (list (cons var (add-variable state)) (cons value (add-value state)))])))
+      [else                 (list (cons var (add-var state)) (cons value (add-value state)))])))
 
-(define add-variable car)
+(define add-var car)
 (define add-value cadr)
 
 ;; removes variable/value pair from state, wrapper for remove-acc
@@ -55,10 +55,8 @@
     (remove-acc var state init-state)))
 
 
-;; error if there is no expression to evaluate
-;;takes an expression and evealuates whether it is true or false
-;;the different comparison operators are ==, !=, >, >=, <, <=, &&, ||, !
-;;the operator, left-operand, and right-operand are the same as used in m-value
+;; takes an expression and evealuates whether it is true or false
+;; the different comparison operators are ==, !=, >, >=, <, <=, &&, ||, !
 (define m-bool
   (lambda (exp state)
     (cond
@@ -99,27 +97,30 @@
   (lambda (statement state)
     (cond
       [(null? statement)           (error 'error "undefined expression")]
-      [(null? (dec-exp statement)) (add (dec-variable statement) 'novalue state)]
-      [(list? (dec-exp statement)) (add (dec-variable statement) (m-eval (dec-value statement) state) state)]
-      [else                        (add (dec-variable statement) (dec-value statement) state)])))
+      [(null? (dec-exp statement)) (add (dec-var statement) 'novalue state)]
+      [(list? (dec-exp statement)) (add (dec-var statement)
+                                        (m-eval (dec-value statement) state)
+                                        state)]
+      [else                        (add (dec-var statement) (dec-value statement) state)])))
 
 (define dec-exp cddr)
-(define dec-variable cadr)
+(define dec-var cadr)
 (define dec-value caddr)
 
 ;; assigns a value to a variable
 (define m-assign
   (lambda (statement state)
     (cond
-      [(null? statement)                         (error 'error "undefined expression")]
-      [(instate? (ass-variable statement) state) (m-declare (list (equal-sign statement)
-                                                                  (ass-variable statement)
-                                                                  (m-eval (ass-value statement) state))
-                                                            (remove (ass-variable statement) state))]
-      [else                                      (error 'error "variable not declared")])))
+      [(null? statement)            (error 'error "undefined expression")]
+      [(instate? (ass-var statement)
+                 state)             (m-declare (list (equal-sign statement)
+                                                     (ass-var statement)
+                                                     (m-eval (ass-value statement) state))
+                                               (remove (ass-var statement) state))]
+      [else                         (error 'error "variable not declared")])))
 
 (define equal-sign car)
-(define ass-variable cadr)
+(define ass-var cadr)
 (define ass-value caddr)
   
 ;; returns an evaluated expression
@@ -129,11 +130,14 @@
       [(null? statement)                           (error 'error "undefined expression")]
       [(eq? #t (m-eval (ret-exp statement) state)) (add 'return 'true state)]
       [(eq? #f (m-eval (ret-exp statement) state)) (add 'return 'false state)]
-      [else                                        (add 'return (m-eval (ret-exp statement) state) state)])))
+      [else                                        (add 'return
+                                                        (m-eval (ret-exp statement) state)
+                                                        state)])))
 
 (define ret-exp cadr)
 
-;; if statement that returns the evaluated first statement if true or the second statement if false, if it exists
+;; if statement that returns the evaluated first statement if true or the second statement if false,
+;; if it exists
 (define m-if
   (lambda (statement state)
     (cond
@@ -151,9 +155,11 @@
 (define m-while
   (lambda (statement state)
     (cond
-      [(null? statement)                              (error 'error "undefined statement")]
-      [(eq? #t (m-bool (while-cond statement) state)) (m-while statement (m-state (while-statement statement) state))]
-      [else                                           state])))
+      [(null? statement)              (error 'error "undefined statement")]
+      [(eq? #t (m-bool
+                (while-cond statement)
+                state))               (m-while statement (m-state (while-statement statement) state))]
+      [else                           state])))
 
 (define while-cond cadr)
 (define while-statement caddr)
@@ -209,11 +215,11 @@
   (lambda (var state)
     (cond
       [(null? (variable-list state)) 'notfound]
-      [(eq? var (variable state))    (variable-value state)]
+      [(eq? var (variable state))    (var-value state)]
       [else                          (get var (list (rest-of-variable-list state)
                                                     (rest-of-value-list state)))])))
 
-(define variable-value caadr)
+(define var-value caadr)
 (define rest-of-value-list cdadr)
 
 ;; removes variable/state pair from state
@@ -226,7 +232,7 @@
       [else                          (remove-acc var (list (rest-of-variable-list state)
                                                            (rest-of-value-list state))
                                                  (list (cons (variable state) (variable-list acc))
-                                                       (cons (variable-value state) (values acc))))])))
+                                                       (cons (var-value state) (values acc))))])))
 
 (define values cadr)
 
@@ -234,6 +240,7 @@
 (define m-eval
   (lambda (exp state)
     (cond
-      [(equal? 'invalid_expression (m-bool exp state)) (m-value exp state)]
-      [else                                            (m-bool exp state)])))        
+      [(equal? 'invalid_expression
+               (m-bool exp state)) (m-value exp state)]
+      [else                        (m-bool exp state)])))        
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              
