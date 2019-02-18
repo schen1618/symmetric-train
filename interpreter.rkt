@@ -38,14 +38,20 @@
   (lambda (var value state)
     (cond
       [(instate? var state) (error 'error "variable already defined")]
-      [else                 (list (cons var (car state)) (cons value (cadr state)))])))
+      [else                 (list (cons var (addvar state)) (cons value (addval state)))])))
+
+(define addvar car)
+(define addval cadr)
 
 ;; removes variable/value pair from state, wrapper for remove-acc
 (define remove
   (lambda (var state)
     (remove-acc var state init-state)))
 
-;; Chris please test all conditions thanks
+;; error if there is no expression to evaluate
+;;takes an expression and evealuates whether it is true or false
+;;the different comparison operators are ==, !=, >, >=, <, <=, &&, ||, !
+;;the operator, left-operand, and right-operand are the same as used in m-value
 (define m-bool
   (lambda (exp state)
     (cond
@@ -76,56 +82,75 @@
   (lambda (exp state)
     (cond
       [(null? exp)          (error 'error "undefined expression")]
-      [(null? (cddr exp))   (add (cadr exp) 'novalue state)]
-      [(list? (cddr exp))   (add (cadr exp) (m-eval (caddr exp) state) state)]
-      [else                 (add (cadr exp) (caddr exp) state)])))
+      [(null? (decexp exp))   (add (decvar exp) 'novalue state)]
+      [(list? (decexp exp))   (add (decvar exp) (m-eval (decval exp) state) state)]
+      [else                 (add (decvar exp) (decval exp) state)])))
 
-;; Chris please test
+(define decexp cddr)
+(define decvar cadr)
+(define decval caddr)
+
+;; assigns a value to a variable
 (define m-assign
   (lambda (exp state)
     (cond
       [(null? exp)                 (error 'error "undefined expression")]
-      [(instate? (cadr exp) state) (m-declare (list (car exp) (cadr exp) (m-eval (caddr exp) state)) (remove (cadr exp) state))]
+      [(instate? (assvar exp) state) (m-declare (list (car exp) (assvar exp) (m-eval (assval exp) state)) (remove (assvar exp) state))]
       [else                        (error 'error "variable not declared")])))
 
-;; returns an expression, Chris please test but I think it works
+(define assvar cadr)
+(define assval caddr)
+  
+;; returns an evaluated expression
 (define m-return
   (lambda (exp state)
     (cond
       [(null? exp) (error 'error "undefined expression")]
-      [(eq? #t (m-eval (cadr exp) state)) (add 'return 'true state)]
-      [(eq? #f (m-eval (cadr exp) state)) (add 'return 'false state)]
-      [else        (add 'return (m-eval (cadr exp) state) state)])))
+      [(eq? #t (m-eval (retval exp) state)) (add 'return 'true state)]
+      [(eq? #f (m-eval (retval exp) state)) (add 'return 'false state)]
+      [else        (add 'return (m-eval (retval exp) state) state)])))
 
-;; if statement
+(define retval cadr)
+
+;; if statement that returns the evaluated first statement if true or the second statement if false, if it exists
 (define m-if
   (lambda (statement state)
     (cond
       [(null? statement)                        (error 'error "undefined statement")]
-      [(eq? #t (m-bool (cadr statement) state)) (m-state (caddr statement) state)]
-      [(not (null? (cdddr statement)))          (m-state (cadddr statement) state)]
+      [(eq? #t (m-bool (ifexp statement) state)) (m-state (ifval statement) state)]
+      [(not (null? (elseexp statement)))          (m-state (elseval statement) state)]
       [else                                     state])))
 
-;; while statement
+(define ifexp cadr)
+(define ifval caddr)
+(define elseexp cdddr)
+(define elseval cadddr)
+
+;; while loop that evaluates the statement until the condition is no longer true
 (define m-while
   (lambda (statement state)
     (cond
       [(null? statement)                        (error 'error "undefined statement")]
-      [(eq? #t (m-bool (cadr statement) state)) (m-while statement (m-state (caddr statement) state))]
+      [(eq? #t (m-bool (whileexp statement) state)) (m-while statement (m-state (whileval statement) state))]
       [else                                     state])))
 
-;; m-state 😊
+(define whileexp cadr)
+(define whileval caddr)
+
+;; m-state tracks the next expression to be evaluated
 (define m-state
   (lambda (statement state)
     (cond
-      [(eq? (car statement) 'var)    (m-declare statement state)]
-      [(eq? (car statement) '=)      (m-assign statement state)]
-      [(eq? (car statement) 'return) (m-return statement state)]
-      [(eq? (car statement) 'if)     (m-if statement state)]
-      [(eq? (car statement) 'while)  (m-while statement state)]
+      [(eq? (identifier statement) 'var)    (m-declare statement state)]
+      [(eq? (identifier statement) '=)      (m-assign statement state)]
+      [(eq? (identifier statement) 'return) (m-return statement state)]
+      [(eq? (identifier statement) 'if)     (m-if statement state)]
+      [(eq? (identifier statement) 'while)  (m-while statement state)]
       [else                          error 'error "undefined expression"])))
 
-;; interpret tree
+(define identifier car)
+
+;; interpret tree takes a tree as an argument and returns the evaluated colleciton of statements
 (define interpret-tree
   (lambda (tree state)
     (cond
@@ -133,7 +158,7 @@
       [(pair? tree) (interpret-tree (cdr tree) (m-state (car tree) state))])))
       
 
-; interpret
+; interpret takes a filename and runs it through interpret-tree
 (define interpret
   (lambda (filename)
     (interpret-tree (parser filename) init-state)))
@@ -146,25 +171,39 @@
 (define instate?
   (lambda (var state)
     (cond
-      [(null? (car state))    #f]
-      [(eq? var (caar state)) #t]
-      [else                   (instate? var (cons (cdar state) (cdr state)))])))
+      [(null? (nullexp state))    #f]
+      [(eq? var (varin state)) #t]
+      [else                   (instate? var (cons (instatevar state) (instatestate state)))])))
+
+(define nullexp car)
+(define varin caar)
+(define instatevar cdar)
+(define  instatestate cdr)
 
 ;; gets value of a variable from state
+;; nullexp and varin are same as with instate
 (define get
   (lambda (var state)
     (cond
-      [(null? (car state))    'notfound]
-      [(eq? var (caar state)) (caadr state)]
-      [else                   (get var (list (cdar state) (cdadr state)))])))
+      [(null? (nullexp state))    'notfound]
+      [(eq? var (varin state)) (varreturn state)]
+      [else                   (get var (list (getvar state) (getstate state)))])))
+
+(define varreturn caadr)
+(define getvar cdar)
+(define getstate cdadr)
 
 ;; removes variable/state pair from state
+;; nullexp and varin are same as with instate
 (define remove-acc
   (lambda (var state acc)
     (cond
-      [(null?                 (car state)) acc]
-      [(eq? var (caar state)) (remove-acc var (list (cdar state) (cdadr state)) acc)]
-      [else                   (remove-acc var (list (cdar state) (cdadr state)) (list (cons (caar state) (car acc)) (cons (caadr state) (cadr acc))))])))
+      [(null?                 (nullexp state)) acc]
+      [(eq? var (varin state)) (remove-acc var (list (removevar state) (removestate state)) acc)]
+      [else                   (remove-acc var (list (removevar state) (removestate state)) (list (cons (caar state) (car acc)) (cons (caadr state) (cadr acc))))])))
+
+(define removevar cdar)
+(define removestate cdadr)
 
 ;; evaluates an expression
 (define m-eval
@@ -172,3 +211,4 @@
     (cond
       [(equal? 'invalid_expression (m-bool exp state)) (m-value exp state)]
       [else                                            (m-bool exp state)])))        
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             
