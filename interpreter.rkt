@@ -164,6 +164,13 @@
 (define while-cond cadr)
 (define while-statement caddr)
 
+;; evaluates the block of statements between the brackets
+(define block
+  (lambda (statement-list state return)
+    (cond
+      ((null? statement-list) (state))
+      (else (block (cdr statement-list) (delList (m-state (car statement-list) (addList(state)))) (lambda (v) (return (m-eval v state))))))))
+
 ;; m-state calls the appropriate function to evaluate the statement
 (define m-state
   (lambda (statement state)
@@ -231,7 +238,7 @@
                                                            (rest-of-value-list state)) acc)]
       [else                          (remove-acc var (list (rest-of-variable-list state)
                                                            (rest-of-value-list state))
-                                                 (list (cons (variable state) (variable-list acc))
+/                                                 (list (cons (variable state) (variable-list acc))
                                                        (cons (var-value state) (values acc))))])))
 
 (define values cadr)
@@ -242,5 +249,19 @@
     (cond
       [(equal? 'invalid_expression
                (m-bool exp state)) (m-value exp state)]
-      [else                        (m-bool exp state)])))        
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             
+      [else                        (m-bool exp state)])))
+
+;; deletes the top list
+;; doesnt work yet, this is just flatten
+(define delList
+  (lambda (lis)
+    (cond
+      ((null? lis)            '())
+      ((list? (car lis)) (append (delList (car lis)) (delList (cdr lis))))
+      (else (cons (car lis) (delList (cdr lis)))))))
+
+
+;; adds a list around the input list
+(define addList
+  (lambda (state)
+    (list state)))
