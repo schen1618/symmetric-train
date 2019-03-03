@@ -251,17 +251,16 @@
                (m-bool exp state)) (m-value exp state)]
       [else                        (m-bool exp state)])))
 
-;; deletes the top list
-;; doesnt work yet, this is just flatten
-(define delList
-  (lambda (lis)
+;; deletes the top layer of the input state
+(define deleteList
+  (lambda (state)
     (cond
-      ((null? lis)            '())
-      ((list? (car lis)) (append (delList (car lis)) (delList (cdr lis))))
-      (else (cons (car lis) (delList (cdr lis)))))))
+      ((null? state) '())
+      ((list? (car state)) (append (car state) (cdr state)))
+      (else (cons (car state) (cdr state))))))
 
 
-;; adds a list around the input list
+;; adds a layer to the input state
 (define addList
   (lambda (state)
     (list state)))
