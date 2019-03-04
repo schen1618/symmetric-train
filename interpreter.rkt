@@ -244,3 +244,7 @@
                (m-bool exp state)) (m-value exp state)]
       [else                        (m-bool exp state)])))        
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              
+
+
+
+(define x 'chrisSucks) 
