@@ -169,7 +169,7 @@
   (lambda (statement-list state return)
     (cond
       ((null? statement-list) (state))
-      (else (block (cdr statement-list) (delList (m-state (car statement-list) (addList(state)))) (lambda (v) (return (m-eval v state))))))))
+      (else (block (cdr statement-list) (deleteList (m-state (car statement-list) (addList(state)))) (lambda (v) (return (m-eval v state))))))))
 
 ;; m-state calls the appropriate function to evaluate the statement
 (define m-state
@@ -238,7 +238,7 @@
                                                            (rest-of-value-list state)) acc)]
       [else                          (remove-acc var (list (rest-of-variable-list state)
                                                            (rest-of-value-list state))
-/                                                 (list (cons (variable state) (variable-list acc))
+                                                 (list (cons (variable state) (variable-list acc))
                                                        (cons (var-value state) (values acc))))])))
 
 (define values cadr)
@@ -249,15 +249,7 @@
     (cond
       [(equal? 'invalid_expression
                (m-bool exp state)) (m-value exp state)]
-<<<<<<< HEAD
-      [else                        (m-bool exp state)])))        
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             
-
-
-
-(define x 'chrisSucks) 
-=======
-      [else                        (m-bool exp state)])))
+      [else                        (m-bool exp state)])))     
 
 ;; deletes the top layer of the input state
 (define deleteList
@@ -272,4 +264,5 @@
 (define addList
   (lambda (state)
     (list state)))
->>>>>>> 7af3dc6328bb4dcae0dd52f0af61c284deb9a600
+
+(define x 'cmon)
