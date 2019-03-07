@@ -7,7 +7,7 @@
 ;;;;   *TO USE: (interpret "filename")
 ;;;; ******************************************************************************************
 
-    
+
 ;; takes an expression of numbers/variables and operators and returns the value
 ;; The operators are +, -, *, /, % and division is integer division
 (define m-value
@@ -108,7 +108,7 @@
   (lambda (statement state return break continue)
     (cond
       [(null? statement)           (error 'error "undefined expression")]
-      [(null? (dec-exp statement)) (add (dec-var statement) 'novalue state)]
+      [(null? (dec-exp statement)) (add (dec-var statement) 'novalue state return break continue)]
       [(list? (dec-exp statement)) (add (dec-var statement)
                                         (m-eval (dec-value statement) state return break continue)
                                         state)]
@@ -133,7 +133,7 @@
 (define equal-sign car)
 (define ass-var cadr)
 (define ass-value caddr)
-  
+
 ;; returns an evaluated expression
 (define m-return
   (lambda (statement state return break continue)
@@ -209,7 +209,7 @@
     (cond
       [(null? tree) (get 'return state)]
       [else (interpret-state-list (cdr tree) (m-state (car tree) state return break continue) return break continue)])))
-      
+
 
 ;; interpret takes a filename and runs it through state-list
 (define interpret
@@ -265,7 +265,7 @@
       [(not (eq? 'notfound
                  (get-layer var (car state)))) (get-layer var (car state))]
       [else                                    (get var (cdr state))])))
-  
+
 
 ;; removes variable/state pair from state
 (define remove-acc
@@ -287,7 +287,7 @@
     (cond
       [(equal? 'invalid_expression
                (m-bool exp state return break continue)) (m-value exp state return break continue)]
-      [else                        (m-bool exp state return break continue)])))     
+      [else                        (m-bool exp state return break continue)])))
 
 ;; deletes the top layer of the state
 (define delete-layer
