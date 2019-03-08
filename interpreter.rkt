@@ -8,6 +8,8 @@
 ;;;;   *TO USE: (interpret "filename")
 ;;;; ******************************************************************************************
 
+(define init-state '((() ())))
+(define empty-layer '(() ()))
 
 ;; takes an expression of numbers/variables and operators and returns the value
 ;; The operators are +, -, *, /, % and division is integer division
@@ -38,34 +40,6 @@
 (define operator car)
 (define left-operand cadr)
 (define right-operand caddr)
-(define init-state '((() ())))
-(define empty-layer '(() ()))
-
-;; adds a varaible/value pair to a layer
-(define add-to-layer
-  (lambda (var value layer)
-    (cond
-      [(instate-layer var layer) (error 'error "variable already defined")]
-      [else                 (list (cons var (add-var layer)) (cons value (add-value layer)))])))
-
-(define add-var car)
-(define add-value cadr)
-
-;; adds variable/value pair to the state
-(define add
-  (lambda (var value state)
-    (cons (add-to-layer var value (car state)) (cdr state))))
-
-;; removes variable/value pair from a layer, wrapper for remove-acc
-(define remove-from-layer
-  (lambda (var layer)
-    (remove-acc var layer empty-layer)))
-
-;; removes variable/value pair from the top layer
-(define remove
-  (lambda (var state)
-    (cons (remove-from-layer var (car state)) (cdr state))))
-
 
 ;; takes an expression and evealuates whether it is true or false
 ;; the different comparison operators are ==, !=, >, >=, <, <=, &&, ||, !
@@ -125,7 +99,7 @@
     (cond
       [(null? statement)            (error 'error "undefined expression")]
       [(instate? (ass-var statement)
-                 state)             (m-update (ass-var statement) (m-eval (ass-value statement) state return break continue) state)]
+                 state)             (update (ass-var statement) (m-eval (ass-value statement) state return break continue) state)]
       [else                         (error 'error "variable not declared")])))
 
 (define equal-sign car)
@@ -159,21 +133,17 @@
 (define else-statement cadddr)
 
 ;; loop that evaluates the statement until the condition is no longer true
-(define m-while-helper
+(define m-while
   (lambda (statement state return break continue)
+    (call/cc
+     (lambda (break)
     (cond
       [(null? statement)              (error 'error "undefined statement")]
       [(eq? #t (m-bool
                 (while-cond statement)
                 state return break continue))               (m-while statement (call/cc (lambda (continue) (m-state (while-statement statement) state return break continue)))
                                                                      return break continue)]
-      [else                           state])))
-
-(define m-while
-  (lambda (statement state return break continue)
-    (call/cc
-     (lambda (break)
-       (m-while-helper statement state return break continue)))))
+      [else                           state])))))
 
 (define while-cond cadr)
 (define while-statement caddr)
@@ -182,6 +152,12 @@
 (define m-block
   (lambda (statement state return break continue)
     (delete-layer (interpret-state-list (cdr statement) (add-layer state) return break continue))))
+
+;; tries to evaluate the block of code, and if there is a throw condition in the block, immediately exists to catch,
+;; and either way evaluates the finally block afterward
+(define try
+  (lambda (state statement return continue break throw)
+    (return)))
 
 ;; m-state calls the appropriate function to evaluate the statement
 (define m-state
@@ -219,6 +195,40 @@
 ;;;; ******************************************************************************************
 ;;;;   helper methods
 ;;;; ******************************************************************************************
+
+;; adds a varaible/value pair to a layer
+(define add-to-layer
+  (lambda (var value layer)
+    (cond
+      [(instate-layer var layer) (error 'error "variable already defined")]
+      [else                 (list (cons var (add-var layer)) (cons value (add-value layer)))])))
+
+(define add-var car)
+(define add-value cadr)
+
+;; adds variable/value pair to the state
+(define add
+  (lambda (var value state)
+    (cons (add-to-layer var value (car state)) (cdr state))))
+
+;; removes variable/value pair from a layer, wrapper for remove-acc
+(define remove-from-layer
+  (lambda (var layer)
+    (remove-acc var layer empty-layer)))
+
+;; removes variable/state pair from state
+(define remove-acc
+  (lambda (var state acc)
+    (cond
+      [(null? (variable-list state)) acc]
+      [(eq? var (variable state))    (remove-acc var (list (rest-of-variable-list state)
+                                                           (rest-of-value-list state)) acc)]
+      [else                          (remove-acc var (list (rest-of-variable-list state)
+                                                           (rest-of-value-list state))
+                                                 (list (cons (variable state) (variable-list acc))
+                                                       (cons (var-value state) (values acc))))])))
+
+(define values cadr)
 
 ;; determines if the variable is in state in that layer
 (define instate-layer
@@ -265,27 +275,12 @@
                  (get-layer var (car state)))) (get-layer var (car state))]
       [else                                    (get var (cdr state))])))
 
-(define m-update
+(define update
   (lambda (var val state)
     (cond
       [(null? state) (error 'error "Variable does not exist")]
       [(instate-layer var (car state)) (cons (add-to-layer var val (remove-from-layer var (car state))) (cdr state))]
-      [else (cons (car state) (m-update var val (cdr state)))])))
-
-
-;; removes variable/state pair from state
-(define remove-acc
-  (lambda (var state acc)
-    (cond
-      [(null? (variable-list state)) acc]
-      [(eq? var (variable state))    (remove-acc var (list (rest-of-variable-list state)
-                                                           (rest-of-value-list state)) acc)]
-      [else                          (remove-acc var (list (rest-of-variable-list state)
-                                                           (rest-of-value-list state))
-                                                 (list (cons (variable state) (variable-list acc))
-                                                       (cons (var-value state) (values acc))))])))
-
-(define values cadr)
+      [else (cons (car state) (update var val (cdr state)))])))
 
 ;; evaluates an expression
 (define m-eval
