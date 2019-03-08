@@ -123,7 +123,7 @@
   (lambda (statement state return break continue)
     (cond
       [(null? statement)            (error 'error "undefined expression")]
-      [(instate? (ass-var statement)
+      [(instate-layer (ass-var statement)
                  state)             (m-declare (list (equal-sign statement)
                                                      (ass-var statement)
                                                      (m-eval (ass-value statement) state return break continue))
@@ -167,7 +167,7 @@
       [(null? statement)              (error 'error "undefined statement")]
       [(eq? #t (m-bool
                 (while-cond statement)
-                state))               (m-while statement (m-state (while-statement statement) state return break continue) return break continue)]
+                state return break continue))               (m-while statement (m-state (while-statement statement) state return break continue) return break continue)]
       [else                           state])))
 
 (define m-while
@@ -182,10 +182,7 @@
 ;; evaluates the block of statements between the brackets
 (define m-block
   (lambda (statement state return break continue)
-    (cond
-      [(null? (cdr statement)) (return state)]
-      [else (delete-layer (interpret-state-list (cdr statement) (add-layer state) return break continue))])))
-
+    (delete-layer (interpret-state-list (cdr statement) (add-layer state) return break continue))))
 
 ;; m-state calls the appropriate function to evaluate the statement
 (define m-state
@@ -194,7 +191,8 @@
       [(eq? (identifier statement) 'var)    (m-declare statement state return break continue)]
       [(eq? (identifier statement) '=)      (m-assign statement state return break continue)]
       [(eq? (identifier statement) 'return) (m-return statement state return break continue)]
-      [(eq? (identifier statement) 'break)  (break state)]
+      [(eq? (identifier statement) 'break)  (break delete-layer(state))]
+      [(eq? (identifier statement) 'continue) (continue state)]
       [(eq? (identifier statement) 'if)     (m-if statement state return break continue)]
       [(eq? (identifier statement) 'while)  (m-while statement state return break continue)]
       [(eq? (identifier statement) 'begin)  (m-block statement state return break continue)]
@@ -207,7 +205,7 @@
 (define interpret-state-list
   (lambda (tree state return break continue)
     (cond
-      [(null? tree) (get 'return state)]
+      [(null? tree) state]
       [else (interpret-state-list (cdr tree) (m-state (car tree) state return break continue) return break continue)])))
 
 
@@ -223,7 +221,7 @@
 ;;;;   helper methods
 ;;;; ******************************************************************************************
 
-;; determines if the variable is in state
+;; determines if the variable is in state in that layer
 (define instate-layer
   (lambda (var layer)
     (cond
@@ -237,6 +235,7 @@
 (define rest-of-variable-list cdar)
 (define value-list cdr)
 
+;; determines if the variable has been declared in the program
 (define instate?
   (lambda (var state)
     (cond
@@ -292,10 +291,13 @@
 ;; deletes the top layer of the state
 (define delete-layer
   (lambda (state)
-    (cdr state)))
+    (next state)))
 
+(define next cdr)
 
 ;; adds a layer to the state
 (define add-layer
   (lambda (state)
-    (cons empty-layer state)))
+    (add-list empty-layer state)))
+
+(define add-list cons)
