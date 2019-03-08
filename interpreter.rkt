@@ -50,7 +50,7 @@
 (define add-var car)
 (define add-value cadr)
 
-;; adds variable/value pair to state
+;; adds variable/value pair to the state
 (define add
   (lambda (var value state)
     (cons (add-to-layer var value (car state)) (cdr state))))
@@ -60,7 +60,7 @@
   (lambda (var layer)
     (remove-acc var layer empty-layer)))
 
-;; removes variable/value pair from top layer
+;; removes variable/value pair from the top layer
 (define remove
   (lambda (var state)
     (cons (remove-from-layer var (car state)) (cdr state))))
@@ -123,11 +123,8 @@
   (lambda (statement state return break continue)
     (cond
       [(null? statement)            (error 'error "undefined expression")]
-      [(instate-layer (ass-var statement)
-                 state)             (m-declare (list (equal-sign statement)
-                                                     (ass-var statement)
-                                                     (m-eval (ass-value statement) state return break continue))
-                                               (remove (ass-var statement) state) return break continue)]
+      [(instate? (ass-var statement)
+                 state)             (m-update (ass-var statement) (m-eval (ass-value statement) state return break continue) state)]
       [else                         (error 'error "variable not declared")])))
 
 (define equal-sign car)
@@ -145,7 +142,7 @@
 
 (define ret-exp cadr)
 
-;; if statement that returns the evaluated first statement if true or the second statement if false,
+;; returns the evaluated first statement if true or the second statement if false,
 ;; if it exists
 (define m-if
   (lambda (statement state return break continue)
@@ -160,7 +157,7 @@
 (define else cdddr)
 (define else-statement cadddr)
 
-;; while loop that evaluates the statement until the condition is no longer true
+;; loop that evaluates the statement until the condition is no longer true
 (define m-while-helper
   (lambda (statement state return break continue)
     (cond
@@ -248,7 +245,8 @@
 (define get-layer
   (lambda (var layer)
     (cond
-      [(null? (variable-list layer)) 'notfound]
+      [
+       (null? (variable-list layer)) 'notfound]
       [(eq? var (variable layer))    (var-value layer)]
       [else                          (get-layer var (list (rest-of-variable-list layer)
                                                     (rest-of-value-list layer)))])))
@@ -264,6 +262,13 @@
       [(not (eq? 'notfound
                  (get-layer var (car state)))) (get-layer var (car state))]
       [else                                    (get var (cdr state))])))
+
+(define m-update
+  (lambda (var val state)
+    (cond
+      [(null? state) (error 'error "Variable does not exist")]
+      [(instate-layer var (car state)) (cons (add var val (remove var state)) (cdr state))]
+      [else (cons (car state) (m-update var val (cdr state)))])))
 
 
 ;; removes variable/state pair from state
