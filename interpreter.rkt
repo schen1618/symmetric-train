@@ -1,4 +1,5 @@
 #lang racket
+(provide (all-defined-out))
 (require "simpleParser.rkt")
 ;;;; ******************************************************************************************
 ;;;;   Intepreter, part 2
@@ -108,7 +109,7 @@
   (lambda (statement state return break continue)
     (cond
       [(null? statement)           (error 'error "undefined expression")]
-      [(null? (dec-exp statement)) (add (dec-var statement) 'novalue state return break continue)]
+      [(null? (dec-exp statement)) (add (dec-var statement) 'novalue state)]
       [(list? (dec-exp statement)) (add (dec-var statement)
                                         (m-eval (dec-value statement) state return break continue)
                                         state)]
@@ -148,7 +149,7 @@
   (lambda (statement state return break continue)
     (cond
       [(null? statement)                           (error 'error "undefined statement")]
-      [(eq? #t (m-bool (if-cond statement) state)) (m-state (then-statement statement) state return break continue)]
+      [(eq? #t (m-bool (if-cond statement) state return break continue)) (m-state (then-statement statement) state return break continue)]
       [(not (null? (else statement)))              (m-state (else-statement statement) state return break continue)]
       [else                                        state])))
 
@@ -164,7 +165,8 @@
       [(null? statement)              (error 'error "undefined statement")]
       [(eq? #t (m-bool
                 (while-cond statement)
-                state return break continue))               (m-while statement (m-state (while-statement statement) state return break continue) return break continue)]
+                state return break continue))               (m-while statement (m-state (while-statement statement) state return break continue)
+                                                                     return break continue)]
       [else                           state])))
 
 (define m-while
@@ -188,8 +190,8 @@
       [(eq? (identifier statement) 'var)    (m-declare statement state return break continue)]
       [(eq? (identifier statement) '=)      (m-assign statement state return break continue)]
       [(eq? (identifier statement) 'return) (m-return statement state return break continue)]
-      [(eq? (identifier statement) 'break)  (break delete-layer(state))]
-      [(eq? (identifier statement) 'continue) (continue state)]
+      [(eq? (identifier statement) 'break)  (break (delete-layer state))]
+      [(eq? (identifier statement) 'continue) (continue (delete-layer state))]
       [(eq? (identifier statement) 'if)     (m-if statement state return break continue)]
       [(eq? (identifier statement) 'while)  (m-while statement state return break continue)]
       [(eq? (identifier statement) 'begin)  (m-block statement state return break continue)]
@@ -267,7 +269,7 @@
   (lambda (var val state)
     (cond
       [(null? state) (error 'error "Variable does not exist")]
-      [(instate-layer var (car state)) (cons (add var val (remove var state)) (cdr state))]
+      [(instate-layer var (car state)) (cons (add-to-layer var val (remove-from-layer var (car state))) (cdr state))]
       [else (cons (car state) (m-update var val (cdr state)))])))
 
 
