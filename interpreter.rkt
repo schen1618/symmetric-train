@@ -1,5 +1,6 @@
 ; If you are using scheme instead of racket, comment these two lines, uncomment the (load "simpleParser.scm") and comment the (require "simpleParser.rkt")
 #lang racket
+<<<<<<< HEAD
 (require "functionParser.rkt")
 
 
@@ -30,6 +31,54 @@
 ; interpret a statement in the environment with continuations for return, break, continue, throw
 (define interpret-statement
   (lambda (statement environment return break continue throw)
+=======
+(provide (all-defined-out))
+(require "simpleParser.rkt")
+;;;; ******************************************************************************************
+;;;;   Intepreter, part 2
+;;;;   EECS 345
+;;;;   Sherry Chen, Chris Toomey
+;;;;   *TO USE: (interpret "filename")
+;;;; ******************************************************************************************
+
+(define init-state '((() ())))
+(define empty-layer '(() ()))
+
+;; takes an expression of numbers/variables and operators and returns the value
+;; The operators are +, -, *, /, % and division is integer division
+(define m-value
+  (lambda (exp state return break continue)
+    (cond
+      [(null? exp)                    (error 'undefined "undefined expression")]
+      [(number? exp)                  exp]
+      [(equal? (get exp state)
+               'novalue)              (error 'error "variable not assigned")]
+      [(and (not (list? exp))
+            (equal? 'notfound
+                    (get exp state))) (error 'error "variable not declared")]
+      [(instate? exp state)           (get exp state)]
+      [(eq? (operator exp) '+)        (+ (m-value (left-operand exp) state return break continue)
+                                         (m-value (right-operand exp) state return break continue))]
+      [(and (eq? (operator exp) '-)
+            (null? (cddr exp)))       (* (m-value (left-operand exp) state return break continue) -1)]
+      [(eq? (operator exp) '-)        (- (m-value (left-operand exp) state return break continue)
+                                         (m-value (right-operand exp) state return break continue))]
+      [(eq? (operator exp) '*)        (* (m-value (left-operand exp) state return break continue)
+                                         (m-value (right-operand exp) state return break continue))]
+      [(eq? (operator exp) '/)        (quotient (m-value (left-operand exp) state return break continue)
+                                                (m-value (right-operand exp) state return break continue))]
+      [(eq? (operator exp) '%)        (remainder (m-value (left-operand exp) state return break continue)
+                                                 (m-value (right-operand exp) state return break continue))])))
+
+(define operator car)
+(define left-operand cadr)
+(define right-operand caddr)
+
+;; takes an expression and evealuates whether it is true or false
+;; the different comparison operators are ==, !=, >, >=, <, <=, &&, ||, !
+(define m-bool
+  (lambda (exp state return break continue)
+>>>>>>> 2ea59df29b0f69b0a11c8cc5f864a2da5524b7a2
     (cond
       ((eq? 'return (statement-type statement)) (interpret-return statement environment return))
       ((eq? 'var (statement-type statement)) (interpret-declare statement environment))
@@ -64,6 +113,7 @@
 (define interpret-if
   (lambda (statement environment return break continue throw)
     (cond
+<<<<<<< HEAD
       ((eval-expression (get-condition statement) environment) (interpret-statement (get-then statement) environment return break continue throw))
       ((exists-else? statement) (interpret-statement (get-else statement) environment return break continue throw))
       (else environment))))
@@ -137,6 +187,35 @@
 
 (define make-finally-block
   (lambda (finally-statement)
+=======
+      [(null? statement)           (error 'error "undefined expression")]
+      [(null? (dec-exp statement)) (add (dec-var statement) 'novalue state)]
+      [(list? (dec-exp statement)) (add (dec-var statement)
+                                        (m-eval (dec-value statement) state return break continue)
+                                        state)]
+      [else                        (add (dec-var statement) (dec-value statement) state)])))
+
+(define dec-exp cddr)
+(define dec-var cadr)
+(define dec-value caddr)
+
+;; assigns a value to a variable for a layer
+(define m-assign
+  (lambda (statement state return break continue)
+    (cond
+      [(null? statement)            (error 'error "undefined expression")]
+      [(instate? (ass-var statement)
+                 state)             (update (ass-var statement) (m-eval (ass-value statement) state return break continue) state)]
+      [else                         (error 'error "variable not declared")])))
+
+(define equal-sign car)
+(define ass-var cadr)
+(define ass-value caddr)
+
+;; returns an evaluated expression
+(define m-return
+  (lambda (statement state return break continue)
+>>>>>>> 2ea59df29b0f69b0a11c8cc5f864a2da5524b7a2
     (cond
       ((null? finally-statement) '(begin))
       ((not (eq? (statement-type finally-statement) 'finally)) (myerror "Incorrectly formatted finally block"))
@@ -146,6 +225,7 @@
 (define eval-expression
   (lambda (expr environment)
     (cond
+<<<<<<< HEAD
       ((number? expr) expr)
       ((eq? expr 'true) #t)
       ((eq? expr 'false) #f)
@@ -219,11 +299,83 @@
       ((null? (car parameters)) environment)
       ((exists-in-list? (car parameters) environment) (add-params-to-scope (cdr parameters) (insert (car environment) (cadr environment) environment)))
       (else (add-params-to-scope (cdr parameters) environment)))))
+=======
+      [(null? statement)                           (error 'error "undefined statement")]
+      [(eq? #t (m-bool (if-cond statement) state return break continue)) (m-state (then-statement statement) state return break continue)]
+      [(not (null? (else statement)))              (m-state (else-statement statement) state return break continue)]
+      [else                                        state])))
+
+(define if-cond cadr)
+(define then-statement caddr)
+(define else cdddr)
+(define else-statement cadddr)
+
+;; loop that evaluates the statement until the condition is no longer true
+(define m-while
+  (lambda (statement state return break continue)
+    (call/cc
+     (lambda (break)
+    (cond
+      [(null? statement)              (error 'error "undefined statement")]
+      [(eq? #t (m-bool
+                (while-cond statement)
+                state return break continue))               (m-while statement (call/cc (lambda (continue) (m-state (while-statement statement) state return break continue)))
+                                                                     return break continue)]
+      [else                           state])))))
+
+(define while-cond cadr)
+(define while-statement caddr)
+
+;; evaluates the block of statements between the brackets
+(define m-block
+  (lambda (statement state return break continue)
+    (delete-layer (interpret-state-list (cdr statement) (add-layer state) return break continue))))
+
+;; tries to evaluate the block of code, and if there is a throw condition in the block, immediately exists to catch,
+;; and either way evaluates the finally block afterward
+(define try
+  (lambda (state statement return continue break throw)
+    (return)))
+
+;; m-state calls the appropriate function to evaluate the statement
+(define m-state
+  (lambda (statement state return break continue)
+    (cond
+      [(eq? (identifier statement) 'var)    (m-declare statement state return break continue)]
+      [(eq? (identifier statement) '=)      (m-assign statement state return break continue)]
+      [(eq? (identifier statement) 'return) (m-return statement state return break continue)]
+      [(eq? (identifier statement) 'break)  (break (delete-layer state))]
+      [(eq? (identifier statement) 'continue) (continue (delete-layer state))]
+      [(eq? (identifier statement) 'if)     (m-if statement state return break continue)]
+      [(eq? (identifier statement) 'while)  (m-while statement state return break continue)]
+      [(eq? (identifier statement) 'begin)  (m-block statement state return break continue)]
+      [else                                 (error 'error "undefined expression")])))
+
+(define identifier car)
+
+;; state-list takes a list of statements (lists) as an argument
+;; and returns the evaluated collection of statements
+(define interpret-state-list
+  (lambda (tree state return break continue)
+    (cond
+      [(null? tree) state]
+      [else (interpret-state-list (cdr tree) (m-state (car tree) state return break continue) return break continue)])))
+
+
+;; interpret takes a filename and runs it through state-list
+(define interpret
+  (lambda (filename)
+    (call/cc
+     (lambda (return)
+       (interpret-state-list (parser filename) init-state return 'nobreak 'nocontinue)))))
+
+>>>>>>> 2ea59df29b0f69b0a11c8cc5f864a2da5524b7a2
 
 ;-----------------
 ; HELPER FUNCTIONS
 ;-----------------
 
+<<<<<<< HEAD
 ; These helper functions define the operator and operands of a value expression
 (define operator car)
 (define operand1 cadr)
@@ -291,6 +443,59 @@
 ; does a variable exist in the environment?
 (define exists?
   (lambda (var environment)
+=======
+;; adds a varaible/value pair to a layer
+(define add-to-layer
+  (lambda (var value layer)
+    (cond
+      [(instate-layer var layer) (error 'error "variable already defined")]
+      [else                 (list (cons var (add-var layer)) (cons value (add-value layer)))])))
+
+(define add-var car)
+(define add-value cadr)
+
+;; adds variable/value pair to the state
+(define add
+  (lambda (var value state)
+    (cons (add-to-layer var value (car state)) (cdr state))))
+
+;; removes variable/value pair from a layer, wrapper for remove-acc
+(define remove-from-layer
+  (lambda (var layer)
+    (remove-acc var layer empty-layer)))
+
+;; removes variable/state pair from state
+(define remove-acc
+  (lambda (var state acc)
+    (cond
+      [(null? (variable-list state)) acc]
+      [(eq? var (variable state))    (remove-acc var (list (rest-of-variable-list state)
+                                                           (rest-of-value-list state)) acc)]
+      [else                          (remove-acc var (list (rest-of-variable-list state)
+                                                           (rest-of-value-list state))
+                                                 (list (cons (variable state) (variable-list acc))
+                                                       (cons (var-value state) (values acc))))])))
+
+(define values cadr)
+
+;; determines if the variable is in state in that layer
+(define instate-layer
+  (lambda (var layer)
+    (cond
+      [(null? (variable-list layer)) #f]
+      [(eq? var (variable layer))    #t]
+      [else                          (instate-layer var (cons (rest-of-variable-list layer)
+                                                         (value-list layer)))])))
+
+(define variable-list car)
+(define variable caar)
+(define rest-of-variable-list cdar)
+(define value-list cdr)
+
+;; determines if the variable has been declared in the program
+(define instate?
+  (lambda (var state)
+>>>>>>> 2ea59df29b0f69b0a11c8cc5f864a2da5524b7a2
     (cond
       ((null? environment) #f)
       ((exists-in-list? var (variables (topframe environment))) #t)
@@ -325,6 +530,7 @@
       ((exists-in-list? var (variables (topframe environment))) (lookup-in-frame var (topframe environment)))
       (else (lookup-in-env var (cdr environment))))))
 
+<<<<<<< HEAD
 ; Return the value bound to a variable in the frame
 (define lookup-in-frame
   (lambda (var frame)
@@ -381,6 +587,18 @@
 ; Changes a variable binding by placing the new value in the appropriate place in the store
 (define update-in-frame-store
   (lambda (var val varlist vallist)
+=======
+(define update
+  (lambda (var val state)
+    (cond
+      [(null? state) (error 'error "Variable does not exist")]
+      [(instate-layer var (car state)) (cons (add-to-layer var val (remove-from-layer var (car state))) (cdr state))]
+      [else (cons (car state) (update var val (cdr state)))])))
+
+;; evaluates an expression
+(define m-eval
+  (lambda (exp state return break continue)
+>>>>>>> 2ea59df29b0f69b0a11c8cc5f864a2da5524b7a2
     (cond
       ((eq? var (car varlist)) (cons (scheme->language val) (cdr vallist)))
       (else (cons (car vallist) (update-in-frame-store var val (cdr varlist) (cdr vallist)))))))
