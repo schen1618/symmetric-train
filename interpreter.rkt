@@ -41,7 +41,7 @@
       ((eq? 'begin (statement-type statement)) (interpret-block statement environment return break continue throw))
       ((eq? 'throw (statement-type statement)) (interpret-throw statement environment throw))
       ((eq? 'try (statement-type statement)) (interpret-try statement environment return break continue throw))
-      ((eq? 'function (statement-type statement)) (function-list statement environment return break continue throw))
+      ((eq? 'function (statement-type statement)) (interpret-function statement environment return break continue throw))
       ((and (eq? 'main (statement-type statement)) (null? cdr statement)) (run-main statement environment return break continue throw))
       ((eq? 'main (statement-type statement)) (myerror "Cannot have a statement after the main method"))
       (else (myerror "Unknown statement:" (statement-type statement))))))
@@ -207,37 +207,33 @@
       ((eq? (statement-type statement) '=) (interpret-assign statement environment))
       ((eq? (statement-type statement) 'function) (function-list (car statement) environment)))))
 
-<<<<<<< HEAD
 ;; Interprets the input function
 (define interpret-function
   (lambda
       (statement environment return break continue throw)
     (cond
-      ((eq? (car statement) 'main) (main (cdr statement) environment))
+      ((eq? (cadr statement) 'main) (run-main (cdr statement) environment return break continue throw))
       (else (add-to-frame (cadr statement) (function-evaluation (caddr statement) (cadddr statement) environment return break continue throw) environment)))))
 
 ;; Evaluates a function
 (define function-evaluation
   (lambda
       (parameters body environment return break continue throw)
-    (set-box! box newenvironment)
     (interpret-statement-list body (add-params-to-scope parameters environment) return break continue throw)))
-=======
->>>>>>> 4d276f1cbaeb8e71abff52632dae9fdcf9651e9b
 
 ;; Adds the parameters of the input function to the current scope
 (define add-params-to-scope
   (lambda
       (parameters environment)
     (cond
-      ((null? (car parameters)) environment)
+      ((null? parameters) environment)
       ((exists-in-list? (car parameters) environment) (add-params-to-scope (cdr parameters) (insert (car environment) (cadr environment) environment)))
       (else (add-params-to-scope (cdr parameters) environment)))))
 
 ;; Creates a list of the input function with the name as the variable and the parameters and body as the value
 (define function-list
   (lambda
-      (statement environment)
+      (statement environment return break continue throw)
     (add-to-frame (cadr statement) (list (caddr statement) (cadddr statement)) environment)))
 
 (define function-in-main
