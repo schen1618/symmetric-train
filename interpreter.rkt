@@ -41,7 +41,7 @@
       ((eq? 'begin (statement-type statement)) (interpret-block statement environment return break continue throw))
       ((eq? 'throw (statement-type statement)) (interpret-throw statement environment throw))
       ((eq? 'try (statement-type statement)) (interpret-try statement environment return break continue throw))
-      ((eq? 'function (statement-type statement)) (function-list statement environment return break continue throw))
+      ((eq? 'function (statement-type statement)) (interpret-function statement environment return break continue throw))
       ((and (eq? 'main (statement-type statement)) (null? cdr statement)) (run-main statement environment return break continue throw))
       ((eq? 'main (statement-type statement)) (myerror "Cannot have a statement after the main method"))
       (else (myerror "Unknown statement:" (statement-type statement))))))
@@ -221,9 +221,15 @@
 (define function-list
   (lambda
       (statement environment)
-    (add-to-frame (cadr statement) (list (caddr statement) (cadddr statement)) environment)))
+    (insert (cadr statement) (list (caddr statement) (cadddr statement)) environment)))
 
-
+(define interpret-function
+  (lambda
+      (statement environment return break continue throw)
+    (cond
+      ((eq? (cadr statement) 'main) (run-main (cdr statement) environment return break continue throw))
+      (else (function-list statement environment)))))
+             
 (define function-in-main
   (lambda
       (statement environment)
@@ -232,7 +238,7 @@
 (define run-main
   (lambda
       (statement environment return continue break throw)
-    (interpret-statement-list (caddr statement) environment return continue break throw)))
+    (interpret-statement-list (caddr statement) environment return break continue throw)))
 
 (define bind-arguments
   (lambda
