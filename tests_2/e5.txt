@@ -1,0 +1,17 @@
+while(true)
+{
+    try
+    {
+        throw 12;
+    }
+    catch(e)
+    {
+        return e;
+    }
+    finally
+    {
+        break;
+    }
+}
+
+return 0;

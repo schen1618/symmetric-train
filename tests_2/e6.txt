@@ -1,0 +1,31 @@
+var x = 1;
+try
+{
+    x = 12;
+    try
+    {
+        var a = 1;
+        while(true)
+        {
+            var z = 15;
+            if(x < 13)
+            {
+                var y = 12;
+                throw 2 * y;
+            }
+        }
+    }
+    catch(e)
+    {
+        x = 5 * e;
+        throw x;
+    }
+    finally
+    {
+        x = 12;
+    }    
+}
+finally
+{
+    return x;
+}

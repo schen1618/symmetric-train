@@ -1,0 +1,12 @@
+try
+{
+    throw 12;
+}
+catch(e)
+{
+    return e;
+}
+finally
+{
+    return 0;
+}
