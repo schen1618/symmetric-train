@@ -41,7 +41,9 @@
       ((eq? 'begin (statement-type statement)) (interpret-block statement environment return break continue throw))
       ((eq? 'throw (statement-type statement)) (interpret-throw statement environment throw))
       ((eq? 'try (statement-type statement)) (interpret-try statement environment return break continue throw))
-      ((eq? 'function (statement-type statement)) (interpret-function statement environment return break continue throw))
+      ((eq? 'function (statement-type statement)) (function-list statement environment return break continue throw))
+      ((and (eq? 'main (statement-type statement)) (null? cdr statement)) (run-main statement environment return break continue throw))
+      ((eq? 'main (statement-type statement)) (myerror "Cannot have a statement after the main method"))
       (else (myerror "Unknown statement:" (statement-type statement))))))
 
 ; Calls the return continuation with the given expression value
@@ -199,27 +201,12 @@
 (define global-environment-finder
   (lambda
       (statement environment return break continue throw)
-    (set-box! (box newenvironment))
     (cond
       ((null? statement) environment)
       ((eq? (statement-type statement) 'var) (interpret-declare statement environment))
       ((eq? (statement-type statement) '=) (interpret-assign statement environment))
-      ((eq? (statement-type statement) 'function) (interpret-function (car statement) environment)))))
+      ((eq? (statement-type statement) 'function) (function-list (car statement) environment)))))
 
-;; Interprets the input function
-(define interpret-function
-  (lambda
-      (statement environment)
-    (cond
-      ((eq? (car statement) 'main) (main (cdr statement) environment))
-      (else add-to-frame (cadr statement) (function-evaluation (caddr statement) (cadddr statement) environment return break continue throw) environment))))
-
-;; Evaluates a function
-(define function-evaluation
-  (lambda
-      (parameters body environment return break continue throw)
-    (set-box! box newenvironment)
-    (interpret-statement-list body (add-params-to-scope parameters environment) return break continue throw)))
 
 ;; Adds the parameters of the input function to the current scope
 (define add-params-to-scope
@@ -230,11 +217,21 @@
       ((exists-in-list? (car parameters) environment) (add-params-to-scope (cdr parameters) (insert (car environment) (cadr environment) environment)))
       (else (add-params-to-scope (cdr parameters) environment)))))
 
-;; Evaluates the main method
-(define main
+;; Creates a list of the input function with the name as the variable and the parameters and body as the value
+(define function-list
   (lambda
       (statement environment)
-    (interpret-statement-list (cdr statement) push-frame return break continue throw)))
+    (add-to-frame (cadr statement) (list (caddr statement) (cadddr statement)) environment)))
+
+(define function-in-main
+  (lambda
+      (statement environment)
+    (push-frame (add-to-frame (car statement) (cdr statement)))))
+ 
+(define run-main
+  (lambda
+      (statement environment return continue break throw)
+    (interpret-statement-list (caddr statement) environment return continue break throw)))
 
 ;-----------------
 ; HELPER FUNCTIONS
