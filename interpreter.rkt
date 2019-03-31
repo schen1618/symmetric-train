@@ -209,10 +209,10 @@
 ;; Interprets the input function
 (define interpret-function
   (lambda
-      (statement environment)
+      (statement environment return break continue throw)
     (cond
       ((eq? (car statement) 'main) (main (cdr statement) environment))
-      (else add-to-frame (cadr statement) (function-evaluation (caddr statement) (cadddr statement) environment return break continue throw) environment))))
+      (else (add-to-frame (cadr statement) (function-evaluation (caddr statement) (cadddr statement) environment return break continue throw) environment)))))
 
 ;; Evaluates a function
 (define function-evaluation
