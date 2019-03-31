@@ -224,6 +224,29 @@
     (add-to-frame (cadr statement) (list (caddr statement) (cadddr statement)) environment)))
 
 
+(define function-in-main
+  (lambda
+      (statement environment)
+    (pop-frame (lookup (cadr statement) (push-frame (bind-arguments (look-up-params (cadr statement) environment) (cddr statement) environment))))))
+ 
+(define run-main
+  (lambda
+      (statement environment return continue break throw)
+    (interpret-statement-list (caddr statement) environment return continue break throw)))
+
+(define bind-arguments
+  (lambda
+      (params-list args-list environment)
+    (cond
+      ((and (not (null? params-list)) (null? args-list)) (myerror "Did not input enough arguments"))
+      ((and (null? params-list) (not (null? args-list))) (myerror "There are too many arguments"))
+      (else (bind-arguments (cdr params-list) (cdr args-list) (add-to-frame (car params-list) (eval-expression (car args-list) environment) environment))))))
+
+(define look-up-params
+  (lambda
+      (name environment)
+    (car (lookup name environment))))
+
 ;-----------------
 ; HELPER FUNCTIONS
 ;-----------------
