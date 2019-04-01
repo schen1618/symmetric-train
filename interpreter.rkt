@@ -16,17 +16,24 @@
     (scheme->language
      (call/cc
       (lambda (return)
-        (interpret-statement-list (parser file) (newenvironment) return
+        (interpret-functions-globals (parser file) (newenvironment) return
                                   (lambda (env) (myerror "Break used outside of loop"))
                                   (lambda (env) (myerror "Continue used outside of loop"))
                                   (lambda (v env) (myerror "Uncaught exception thrown"))))))))
 
+(define interpret-functions-globals
+  (lambda (statement-list environment return break continue throw)
+    (cond
+      ((null? statement-list) (run-main environment return break continue throw))
+      (else (interpret-functions-globals (cdr statement-list) (interpret-statement (car statement-list) environment return break continue throw) return break continue throw)))))
+
+
 ; interprets a list of statements.  The environment from each statement is used for the next ones.
 (define interpret-statement-list
   (lambda (statement-list environment return break continue throw)
-    (if (null? statement-list)
-        environment
-        (interpret-statement-list (cdr statement-list) (interpret-statement (car statement-list) environment return break continue throw) return break continue throw))))
+    (cond
+      ((null? statement-list) environment)
+      (else (interpret-statement-list (cdr statement-list) (interpret-statement (car statement-list) environment return break continue throw) return break continue throw)))))
 
 ; interpret a statement in the environment with continuations for return, break, continue, throw
 (define interpret-statement
@@ -42,28 +49,28 @@
       ((eq? 'begin (statement-type statement)) (interpret-block statement environment return break continue throw))
       ((eq? 'throw (statement-type statement)) (interpret-throw statement environment throw))
       ((eq? 'try (statement-type statement)) (interpret-try statement environment return break continue throw))
-      ((eq? 'function (statement-type statement)) (interpret-function (without-function-name statement) environment return break continue throw))
-      ((eq? 'funcall (statement-type statement)) (interpret-funcall-environment (function-statement-list (lookup (function-name (without-function-name statement)) environment))
-                                                                            (bind-arguments (get-parameters (lookup (function-name (without-function-name statement)) environment))
-                                                                                                           (parameters (without-function-name statement)) (push-frame environment) throw)
+      ((eq? 'function (statement-type statement)) (interpret-function (without-function-identifier statement) environment return break continue throw))
+      ((eq? 'funcall (statement-type statement)) (create-funcall-environment (function-statement-list (lookup (function-name (without-function-identifier statement)) environment))
+                                                                            (bind-arguments (get-parameters (lookup (function-name (without-function-identifier statement)) environment))
+                                                                                                           (parameters (without-function-identifier statement)) (push-frame environment) throw)
                                                                             return break continue throw))
       (else (myerror "Unknown statement:" (statement-type statement))))))
 
-(define without-function-name cdr)
+(define without-function-identifier cdr)
 (define function-name car)
 (define get-parameters car)
 (define function-statement-list cadr)
 (define parameters cdr)
 
 ;; returns the environment after a function is executed
-(define interpret-funcall-environment
+(define create-funcall-environment
   (lambda (statement-list environment return break continue throw)
     (cond
       ((null? statement-list) environment)
       (else (if (list? (call/cc
                       (lambda (return)
                         (interpret-statement (first-statement statement-list) environment return break continue throw))))
-                  (interpret-funcall-environment (rest-of-statement-list statement-list) (call/cc
+                  (create-funcall-environment (rest-of-statement-list statement-list) (call/cc
                                                                               (lambda (return)
                                                                                 (interpret-statement (first-statement statement-list) environment return break continue throw)))
                                                         return break continue throw)
@@ -221,22 +228,6 @@
         (= val1 val2)
         (eq? val1 val2))))
 
-;; Creates the global environment
-(define global-environment
-  (lambda
-      (statement environment return break continue throw)
-    (global-environment (cdr statement) (global-environment-finder statement environment return break continue throw) return break continue throw)))
-    
-;; Adds the functions and global variables in the global state to the environment
-(define global-environment-finder
-  (lambda
-      (statement environment return break continue throw)
-    (cond
-      ((null? statement) environment)
-      ((eq? (statement-type statement) 'var) (interpret-declare statement environment throw))
-      ((eq? (statement-type statement) '=) (interpret-assign statement environment throw))
-      ((eq? (statement-type statement) 'function) (function-list (car statement) environment)))))
-
 
 ;; Adds the parameters of the input function to the current scope
 (define add-params-to-scope
@@ -254,24 +245,26 @@
     (insert (car statement) (list (cadr statement) (caddr statement)) environment)))
 
 (define interpret-function
-  (lambda
-      (statement environment return break continue throw)
+  (lambda (statement environment return break continue throw)
     (cond
-      ((eq? (car statement) 'main) (run-main (cdr statement) environment return break continue throw))
+      ((null? (func statement)) environment)
       (else (function-list statement environment)))))
+
+(define func cdr)
              
 (define run-main
-  (lambda
-      (statement environment return continue break throw)
-    (interpret-statement-list (cadr statement) environment return break continue throw)))
+  (lambda (environment return continue break throw)
+    (cond
+      ((not (exists? 'main environment)) (myerror "no main method"))
+      (else (interpret-statement-list (find-function-closure 'main environment) (push-frame environment) return break continue throw)))))
 
+ 
 (define bind-arguments
   (lambda (params-list args-list environment throw)
     (cond
       ((and (null? params-list) (null? args-list)) environment)
       ((and (not (null? params-list)) (null? args-list)) (myerror "Error: missing input arguments"))
       ((and (null? params-list) (not (null? args-list))) (myerror "Error: too many input arguments"))
-      
       (else (bind-arguments (cdr params-list) (cdr args-list) (insert (car params-list) (eval-expression (car args-list) (pop-frame environment) throw) environment) throw)))))
 
 (define look-up-params
