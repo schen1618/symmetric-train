@@ -28,7 +28,8 @@
       (statement-list environment return break continue throw)
     (cond
       ((null? statement-list) (run-main environment return break continue throw))
-      (else (interpret-functions-globals (rest-of-statement-list statement-list) (interpret-statement (first-statement statement-list) environment return break continue throw) return break continue throw)))))
+      (else (interpret-functions-globals (rest-of-statement-list statement-list)
+                                         (interpret-statement (first-statement statement-list) environment return break continue throw) return break continue throw)))))
 
 ;; Creates a list of the input function with the name as the variable and the parameters and body as the value
 (define function-list
@@ -60,7 +61,8 @@
       ((and (null? params-list) (null? args-list)) environment)
       ((and (not (null? params-list)) (null? args-list)) (myerror "Error: missing input arguments"))
       ((and (null? params-list) (not (null? args-list))) (myerror "Error: too many input arguments"))
-      (else (bind-arguments (rest-of-list params-list) (rest-of-list args-list) (insert (first-param params-list) (eval-expression (first-param args-list) (pop-frame environment) throw) environment) throw)))))
+      (else (bind-arguments (rest-of-list params-list) (rest-of-list args-list) (insert (first-param params-list)
+                                                                                        (eval-expression (first-param args-list) (pop-frame environment) throw) environment) throw)))))
 
 ;; Finds the parameters of an input function
 (define look-up-params
@@ -80,7 +82,8 @@
       (statement-list environment return break continue throw)
     (cond
       ((null? statement-list) (pop-frame environment))
-      (else (interpret-function-statement-list (rest-of statement-list) (interpret-statement (first statement-list) environment return break continue throw) return break continue throw)))))
+      (else (interpret-function-statement-list (rest-of statement-list)
+                                               (interpret-statement (first statement-list) environment return break continue throw) return break continue throw)))))
 
 ;; Evaluates a function that is being called in the main method with the input arguments
 (define interpret-funcall
@@ -90,8 +93,28 @@
      (lambda (function-return)
        (cond
          ((not (exists? (function-name funcall) environment)) (myerror "Error: function does not exist"))
-         ((null? (parameters funcall)) (interpret-function-statement-list (statement-list-of-function (lookup (function-name funcall) environment)) (push-frame (pop-frame environment)) function-return breakError continueError throw))
-         (else (interpret-function-statement-list (find-function-closure (function-name funcall) environment) (bind-arguments (look-up-params (car funcall) environment) (parameters funcall) (push-frame environment) throw) function-return breakError continueError throw)))))))
+         ((null? (parameters funcall)) (interpret-function-statement-list
+                                        (statement-list-of-function (lookup (function-name funcall) environment))
+                                        (push-frame (pop-frame environment)) function-return breakError continueError throw))
+         (else (interpret-function-statement-list (find-function-closure (function-name funcall) environment)
+                                                  (bind-arguments (look-up-params (car funcall) environment) (parameters funcall) (push-frame environment)
+                                                                  throw) function-return breakError continueError throw)))))))
+
+;; Returns the environment after a function is executed
+(define create-funcall-environment
+  (lambda
+      (statement-list environment return break continue throw)
+    (cond
+      ((null? statement-list) environment)
+      (else (if (list? (call/cc
+                      (lambda (return)
+                        (interpret-statement (first-statement statement-list) environment return break continue throw))))
+                  (create-funcall-environment (rest-of-statement-list statement-list) (call/cc
+                                                                              (lambda (return)
+                                                                                (interpret-statement (first-statement statement-list)
+                                                                                                     environment return break continue throw)))
+                                                        return break continue throw)
+                  environment)))))
 
 ; Interprets a list of statements.  The environment from each statement is used for the next ones.
 (define interpret-statement-list
@@ -99,7 +122,8 @@
       (statement-list environment return break continue throw)
     (cond
       ((null? statement-list) environment)
-      (else (interpret-statement-list (cdr statement-list) (interpret-statement (car statement-list) environment return break continue throw) return break continue throw)))))
+      (else (interpret-statement-list (cdr statement-list) (interpret-statement (car statement-list)
+                                                                                environment return break continue throw) return break continue throw)))))
 
 ; Interpret a statement in the environment with continuations for return, break, continue, throw
 (define interpret-statement
@@ -128,21 +152,6 @@
 (define get-parameters car)
 (define function-statement-list cadr)
 (define parameters cdr)
-
-;; Returns the environment after a function is executed
-(define create-funcall-environment
-  (lambda
-      (statement-list environment return break continue throw)
-    (cond
-      ((null? statement-list) environment)
-      (else (if (list? (call/cc
-                      (lambda (return)
-                        (interpret-statement (first-statement statement-list) environment return break continue throw))))
-                  (create-funcall-environment (rest-of-statement-list statement-list) (call/cc
-                                                                              (lambda (return)
-                                                                                (interpret-statement (first-statement statement-list) environment return break continue throw)))
-                                                        return break continue throw)
-                  environment)))))
 
 ; Calls the return continuation with the given expression value
 (define interpret-return
