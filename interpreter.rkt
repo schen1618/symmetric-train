@@ -2,6 +2,12 @@
 #lang racket
 (require "functionParser.rkt")
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Sherry Chen and Chris Toomey
+;; EECS 345 Interpreter Part 3
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ; An interpreter for the simple language that uses call/cc for the continuations.  Does not handle side effects.
 (define call/cc call-with-current-continuation)
@@ -17,22 +23,24 @@
     (scheme->language
      (call/cc
       (lambda (return)
-        (interpret-functions-globals (parser file) (newenvironment) return
-                                  (lambda (env) (myerror "Break used outside of loop"))
-                                  (lambda (env) (myerror "Continue used outside of loop"))
-                                  (lambda (v env) (myerror "Uncaught exception thrown"))))))))
+        (interpret-functions-global-list (parser file) (newenvironment) return
+                                     (lambda (env) (myerror "Break used outside of loop"))
+                                     (lambda (env) (myerror "Continue used outside of loop"))
+                                     (lambda (v env) (myerror "Uncaught exception thrown"))))))))
 
 ; Interprets the functions in the global environment and stores them in the bottom layer
-(define interpret-functions-globals
+(define interpret-functions-global-list
   (lambda
       (statement-list environment return break continue throw)
     (cond
-      ((null? statement-list) (run-main environment return break continue throw))
-      (else (interpret-functions-globals (rest-of-statement-list statement-list)
-                                         (interpret-statement (first-statement statement-list) environment return break continue throw) return break continue throw)))))
+      ((null? statement-list) (evaluate-main environment return break continue throw))
+      (else                   (interpret-functions-global-list (rest-of-statement-list statement-list)
+                                         (interpret-statement (first-statement statement-list)
+                                                              environment return break continue throw)
+                                         return break continue throw)))))
 
 ;; Creates a list of the input function with the name as the variable and the parameters and body as the value
-(define function-list
+(define add-function-to-env
   (lambda
       (statement environment)
     (insert (name statement) (list (params statement) (body statement)) environment)))
@@ -43,29 +51,33 @@
       (statement environment return break continue throw)
     (cond
       ((null? (func statement)) environment)
-      (else (function-list statement environment)))))
+      (else   (add-function-to-env statement environment)))))
 
 ;; Once everything that is global is in the bottom layer, this function evaluates the main method if it exists
-(define run-main
+(define evaluate-main
   (lambda
       (environment return continue break throw)
     (cond
       ((not (exists? 'main environment)) (myerror "no main method"))
-      (else (interpret-statement-list (find-function-closure 'main environment) (push-frame environment) return break continue throw)))))
+      (else                              (interpret-statement-list (find-function-closure 'main environment)
+                                                                   (push-frame environment)
+                                                                   return break continue throw)))))
 
 ;; Takes in a list of arguments and binds them to the parameters for the function
 (define bind-arguments
   (lambda
       (params-list args-list environment throw)
     (cond
-      ((and (null? params-list) (null? args-list)) environment)
+      ((and (null? params-list) (null? args-list))        environment)
       ((and (not (null? params-list)) (null? args-list)) (myerror "Error: missing input arguments"))
       ((and (null? params-list) (not (null? args-list))) (myerror "Error: too many input arguments"))
-      (else (bind-arguments (rest-of-list params-list) (rest-of-list args-list) (insert (first-param params-list)
-                                                                                        (eval-expression (first-param args-list) (pop-frame environment) throw) environment) throw)))))
+      (else (bind-arguments (rest-of-list params-list)   (rest-of-list args-list) (insert (first-param params-list)
+                                                                                        (eval-expression (first-param args-list)
+                                                                                                         (pop-frame environment) throw)
+                                                                                        environment) throw)))))
 
 ;; Finds the parameters of an input function
-(define look-up-params
+(define find-params
   (lambda
       (name environment)
     (params-list (lookup name environment))))
@@ -82,8 +94,10 @@
       (statement-list environment return break continue throw)
     (cond
       ((null? statement-list) (pop-frame environment))
-      (else (interpret-function-statement-list (rest-of statement-list)
-                                               (interpret-statement (first statement-list) environment return break continue throw) return break continue throw)))))
+      (else                   (interpret-function-statement-list (rest-of-list statement-list)
+                                               (interpret-statement (first-statement statement-list) environment
+                                                                    return break continue throw)
+                                               return break continue throw)))))
 
 ;; Evaluates a function that is being called in the main method with the input arguments
 (define interpret-funcall
@@ -92,29 +106,30 @@
     (call/cc
      (lambda (function-return)
        (cond
-         ((not (exists? (function-name funcall) environment)) (myerror "Error: function does not exist"))
-         ((null? (parameters funcall)) (interpret-function-statement-list
-                                        (statement-list-of-function (lookup (function-name funcall) environment))
-                                        (push-frame (pop-frame environment)) function-return breakError continueError throw))
-         (else (interpret-function-statement-list (find-function-closure (function-name funcall) environment)
-                                                  (bind-arguments (look-up-params (car funcall) environment) (parameters funcall) (push-frame environment)
-                                                                  throw) function-return breakError continueError throw)))))))
+         ((not (exists? (function-name funcall)
+                        environment))          (myerror "Error: function does not exist"))
+         ((null? (parameters funcall))         (interpret-function-statement-list
+                                                (statement-list-of-function (lookup (function-name funcall) environment))
+                                                (push-frame (pop-frame environment)) function-return breakError continueError throw))
+         (else                                 (interpret-function-statement-list (find-function-closure (function-name funcall) environment)
+                                                                                  (bind-arguments (find-params (car funcall) environment)
+                                                                                                  (parameters funcall) (push-frame environment)
+                                                                                                  throw) function-return breakError
+                                                                                                         continueError throw)))))))
 
-;; Returns the environment after a function is executed
+;; Returns the environment after a function is evaluated
 (define create-funcall-environment
-  (lambda
-      (statement-list environment return break continue throw)
+  (lambda (statement-list environment return break continue throw)
     (cond
       ((null? statement-list) environment)
-      (else (if (list? (call/cc
-                      (lambda (return)
-                        (interpret-statement (first-statement statement-list) environment return break continue throw))))
-                  (create-funcall-environment (rest-of-statement-list statement-list) (call/cc
-                                                                              (lambda (return)
-                                                                                (interpret-statement (first-statement statement-list)
-                                                                                                     environment return break continue throw)))
-                                                        return break continue throw)
-                  environment)))))
+      ((not (list? (call/cc
+                    (lambda (return)
+                      (create-funcall-environment (rest-of-statement-list statement-list)
+                                                             (interpret-statement (first-statement statement-list)
+                                                                                  environment return break continue throw)
+                                                             return break continue throw)))))
+                             environment)
+      (else                  environment))))
 
 ; Interprets a list of statements.  The environment from each statement is used for the next ones.
 (define interpret-statement-list
@@ -122,8 +137,10 @@
       (statement-list environment return break continue throw)
     (cond
       ((null? statement-list) environment)
-      (else (interpret-statement-list (cdr statement-list) (interpret-statement (car statement-list)
-                                                                                environment return break continue throw) return break continue throw)))))
+      (else                   (interpret-statement-list (cdr statement-list)
+                                                        (interpret-statement (car statement-list)
+                                                                             environment return break continue throw)
+                                                        return break continue throw)))))
 
 ; Interpret a statement in the environment with continuations for return, break, continue, throw
 (define interpret-statement
@@ -190,7 +207,9 @@
      (lambda (break)
        (letrec ((loop (lambda (condition body environment)
                         (if (eval-expression condition environment throw)
-                            (loop condition body (interpret-statement body environment return break (lambda (env) (break (loop condition body env))) throw))
+                            (loop condition body (interpret-statement body environment return break (lambda
+                                                                                                        (env)
+                                                                                                      (break (loop condition body env))) throw))
                          environment))))
          (loop (get-condition statement) (get-body statement) environment))))))
 
@@ -219,7 +238,8 @@
   (lambda
       (catch-statement environment return break continue throw jump finally-block)
     (cond
-      ((null? catch-statement) (lambda (ex env) (throw ex (interpret-block finally-block env return break continue throw))))
+      ((null? catch-statement) (lambda (ex env)
+                                 (throw ex (interpret-block finally-block env return break continue throw))))
       ((not (eq? 'catch (statement-type catch-statement))) (myerror "Incorrect catch statement"))
       (else (lambda (ex env)
               (jump (interpret-block finally-block
@@ -317,11 +337,13 @@
         (= val1 val2)
         (eq? val1 val2))))
 
+;; Returns an error if there is a break statement outside of a loop
 (define breakError
   (lambda
       (v)
     (myerror "Break used outside loop")))
 
+;; Returns an error if there is a continue statement outside of a loop
 (define continueError
   (lambda
       (v)
@@ -342,8 +364,6 @@
 (define first-param car)
 (define params-list car)
 (define body-list cadr)
-(define rest-of cdr)
-(define first car)
 (define statement-list-of-function cadr)
 
 ; These helper functions define the operator and operands of a value expression
@@ -461,11 +481,10 @@
 
 ; Return the value bound to a variable in the frame
 (define lookup-in-frame
-  (lambda
-      (var frame)
+  (lambda (var frame)
     (cond
       ((not (exists-in-list? var (variables frame))) (myerror "error: undefined variable" var))
-      (else (language->scheme (get-value (indexof var (variables frame)) (store frame)))))))
+      (else (language->scheme (unbox (get-value (indexof var (variables frame)) (store frame))))))))
 
 ; Get the location of a name in a list of names
 (define indexof
@@ -502,9 +521,8 @@
 
 ; Add a new variable/value pair to the frame.
 (define add-to-frame
-  (lambda
-      (var val frame)
-    (list (cons var (variables frame)) (cons (scheme->language val) (store frame)))))
+  (lambda (var val frame)
+    (list (cons var (variables frame)) (cons (box (scheme->language val)) (store frame)))))
 
 ; Changes the binding of a variable in the environment to a new value
 (define update-existing
@@ -522,12 +540,10 @@
 
 ; Changes a variable binding by placing the new value in the appropriate place in the store
 (define update-in-frame-store
-  (lambda
-      (var val varlist vallist)
+  (lambda (var val varlist vallist)
     (cond
-      ((eq? var (car varlist)) (cons (scheme->language val) (cdr vallist)))
+      ((eq? var (car varlist)) (begin (set-box! (car vallist) (scheme->language val)) vallist))
       (else (cons (car vallist) (update-in-frame-store var val (cdr varlist) (cdr vallist)))))))
-
 ; Returns the list of variables from a frame
 (define variables
   (lambda
