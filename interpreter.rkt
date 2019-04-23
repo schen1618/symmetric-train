@@ -283,6 +283,50 @@
       ((not (eq? (statement-type finally-statement) 'finally)) (myerror "Incorrectly formatted finally block"))
       (else (cons 'begin (cadr finally-statement))))))
 
+
+; Finds the methods in a class
+(define find-class-methods
+  (lambda (name body state return break continue throw)
+    (cond
+      ((null? body) state)
+      ((eq? (caar body) 'function) (find-class-methods name (cdr body) (interpret-function (cadr body) return break continue throw) return break continue throw))
+      (else (find-class-methods name (cdr body) state)))))
+
+; Finds the fields in a class
+(define find-class-fields
+  (lambda (name body state)
+    (cond
+      ((null? body) state)
+      ((and (eq? (caar body) 'var) (null? (caddar body))) (find-class-fields name (cdr body) (add-to-frame (cadar body) 'novalue state)))
+      ((eq? (caar body) 'var) (find-class-fields name (cdr body) (add-to-frame (cadar body) (caddar body) state)))
+      (else find-class-fields name (cdr body)))))
+
+; Creates a class closure which holds the super class, methods, and instance fields of a class
+(define create-class-closure
+  (lambda (name parent body state)
+    (cond
+      ((null? parent) (list (find-class-fields name body state) (find-class-methods name body state return break continue throw)))
+      (else 'novalue))))
+
+
+
+
+; Takes a statement from the parse tree and either adds a variable or the function to the closure
+(define create-class-tuple
+  (lambda (statement state throw)
+    (cond
+      ((eq? (car statement) 'function) (add-function-to-env (cdr statement) state))
+      ((eq? (car statement) 'var) (interpret-declare (cdr statement) state throw))
+      ((eq? (car statement) '=) (interpret-assign (cdr statement) state throw))
+      (else state))))
+
+
+
+
+
+                                                     
+
+
 ; Evaluates all possible boolean and arithmetic expressions, including constants and variables.
 (define eval-expression
   (lambda
