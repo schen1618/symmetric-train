@@ -1,6 +1,6 @@
 ; If you are using scheme instead of racket, comment these two lines, uncomment the (load "simpleParser.scm") and comment the (require "simpleParser.rkt")
 #lang racket
-(require "functionParser.rkt")
+(require "classParser.rkt")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -283,6 +283,24 @@
       ((not (eq? (statement-type finally-statement) 'finally)) (myerror "Incorrectly formatted finally block"))
       (else (cons 'begin (cadr finally-statement))))))
 
+; Evaluates the classes input from the parser
+(define eval-class
+  (lambda (statement state return break continue throw)
+    (cond
+      ((null? statement) state)
+      ((and (eq? (car statement) 'class) (eq? (caaddr statement) 'extends)) (add-to-frame (cadr statement) (create-class-closure
+                                                                                                            (cadr statement)
+                                                                                                            (lookup (parent statement) state)
+                                                                                                            (cdddr statement) state return break
+                                                                                                                                 continue throw) state))
+      ((eq? (car statement) 'class) (add-to-frame (cadr statement) (create-class-closure (cadr statement) '()
+                                                                                         (cdddr statement) state return break continue throw) state))
+      (else state))))
+
+
+(define parent
+  (lambda (statement)
+  (cadr (caddr statement))))
 
 ; Finds the methods in a class
 (define find-class-methods
@@ -299,27 +317,14 @@
       ((null? body) state)
       ((and (eq? (caar body) 'var) (null? (caddar body))) (find-class-fields name (cdr body) (add-to-frame (cadar body) 'novalue state)))
       ((eq? (caar body) 'var) (find-class-fields name (cdr body) (add-to-frame (cadar body) (caddar body) state)))
-      (else find-class-fields name (cdr body)))))
+      (else (find-class-fields name (cdr body) state)))))
 
 ; Creates a class closure which holds the super class, methods, and instance fields of a class
 (define create-class-closure
-  (lambda (name parent body state)
+  (lambda (name parent body state return break continue throw)
     (cond
-      ((null? parent) (list (find-class-fields name body state) (find-class-methods name body state return break continue throw)))
-      (else 'novalue))))
-
-
-
-
-; Takes a statement from the parse tree and either adds a variable or the function to the closure
-(define create-class-tuple
-  (lambda (statement state throw)
-    (cond
-      ((eq? (car statement) 'function) (add-function-to-env (cdr statement) state))
-      ((eq? (car statement) 'var) (interpret-declare (cdr statement) state throw))
-      ((eq? (car statement) '=) (interpret-assign (cdr statement) state throw))
-      (else state))))
-
+      ((null? parent) (list (list '() (find-class-fields name body state)) (find-class-methods name body state return break continue throw)))
+      (else (list (list parent (find-class-fields name body state)) (find-class-methods name body state return break continue throw))))))
 
 
 
