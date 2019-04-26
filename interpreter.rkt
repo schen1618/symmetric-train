@@ -23,17 +23,24 @@
     (scheme->language
      (call/cc
       (lambda (return)
-        (interpret-functions-global-list (parser file) (newenvironment) return
-                                     (lambda (env) (myerror "Break used outside of loop"))
-                                     (lambda (env) (myerror "Continue used outside of loop"))
-                                     (lambda (v env) (myerror "Uncaught exception thrown"))))))))
+        (interpret-class-list (parser file) (newworld) return
+                              (lambda (env) (myerror "Break used outside of loop"))
+                              (lambda (env) (myerror "Continue used outside of loop"))
+                              (lambda (v env) (myerror "Uncaught exception thrown"))))))))
+    
 
+(define interpret-class-list
+  (lambda (statement-list world return break continue throw)
+    (cond
+      ((null? statement-list) (evaluate-main world return break continue throw))
+      (else (interpret-class-list (cdr statement-list) (eval-class (car statement-list) world return break continue throw) return break continue throw)))))
+                                                      
 ; Interprets the functions in the global environment and stores them in the bottom layer
 (define interpret-functions-global-list
   (lambda
-      (statement-list environment return break continue throw)
+      (statement-list environment world return break continue throw)
     (cond
-      ((null? statement-list) (evaluate-main environment return break continue throw))
+      ((null? statement-list) (evaluate-main environment world return break continue throw))
       (else                   (interpret-functions-global-list (rest-of-statement-list statement-list)
                                          (interpret-statement (first-statement statement-list)
                                                               environment return break continue throw)
@@ -56,12 +63,18 @@
 ;; Once everything that is global is in the bottom layer, this function evaluates the main method if it exists
 (define evaluate-main
   (lambda
-      (environment return continue break throw)
+      (world return break continue throw)
+    (interpret-statement-list (cadr (find-main world return break continue throw))
+                                                                   (find-main-env world return break continue throw)
+                                                                   return break continue throw)))
+
+(define find-main-env
+  (lambda (world return break continue throw)
     (cond
-      ((not (exists? 'main environment)) (myerror "no main method"))
-      (else                              (interpret-statement-list (find-function-closure 'main environment)
-                                                                   (push-frame environment)
-                                                                   return break continue throw)))))
+      ((null? (car world)) ('error "No main method found"))
+      ((eq?  (caaar (caddr (lookup-in-world (caar world) world))) 'main) (begin (push-frame (caddr (lookup-in-world (caar world) world))) world))
+      (else (find-main (cdar world) return break continue throw)))))
+
 
 ;; Takes in a list of arguments and binds them to the parameters for the function
 (define bind-arguments
@@ -283,23 +296,30 @@
       ((not (eq? (statement-type finally-statement) 'finally)) (myerror "Incorrectly formatted finally block"))
       (else (cons 'begin (cadr finally-statement))))))
 
+(define lookup-in-world
+  (lambda (name world)
+    (lookup-in-frame name world)))
 
-
-
-
-; Evaluates the classes input from the parser
-(define eval-class
-  (lambda (statement state return break continue throw)
+(define find-main
+  (lambda (world return break continue throw)
     (cond
-      ((null? statement) state)
+      ((null? (car world)) ('error "No main method found"))
+      ((eq?  (caaar (caddr (lookup-in-world (caar world) world))) 'main) (lookup-in-env (caaar (caddr (lookup-in-world (caar world) world))) (caddr (lookup-in-world (caar world) world))))
+      (else (find-main (cdar world) return break continue throw)))))
+
+; Evaluates the classes from class list
+(define eval-class
+  (lambda (statement world return break continue throw)
+    (cond
+      ((null? statement) world)
+      ((and (null? (caddr statement)) (eq? (car statement) 'class)) (add-to-frame (cadr statement) (create-class-closure (cadr statement) '()
+                                                                                         (cdddr statement) return break continue throw) world))
       ((and (eq? (car statement) 'class) (eq? (caaddr statement) 'extends)) (add-to-frame (cadr statement) (create-class-closure
                                                                                                             (cadr statement)
                                                                                                             (parent statement)
-                                                                                                            (cdddr statement) state return break
-                                                                                                                                 continue throw) state))
-      ((eq? (car statement) 'class) (add-to-frame (cadr statement) (create-class-closure (cadr statement) '()
-                                                                                         (cdddr statement) state return break continue throw) state))
-      (else state))))
+                                                                                                            (cdddr statement) return break
+                                                                                                                                 continue throw) world))
+      (else 'error "invalid class"))))
 
 
 (define parent
@@ -308,27 +328,33 @@
 
 ; Finds the methods in a class
 (define find-class-methods
-  (lambda (name body state return break continue throw)
+  (lambda (name body environment return break continue throw)
     (cond
-      ((null? body) state)
-      ((eq? (caar body) 'function) (find-class-methods name (cdr body) (interpret-function (cadr body) return break continue throw) return break continue throw))
-      (else (find-class-methods name (cdr body) state)))))
+      ((null? body) environment)
+      ((or (eq? (caaar body) 'function) (eq? (caaar body) 'static-function)) (find-class-methods name (cdr body)
+                                                                                               (interpret-function (cdaar body) environment return break continue throw)
+                                                                                               return break continue throw))
+      (else (find-class-methods name (cdr body) environment return break continue throw)))))
 
 ; Finds the fields in a class
 (define find-class-fields
-  (lambda (name body state)
+  (lambda (name body frame)
     (cond
-      ((null? body) state)
-      ((and (eq? (caar body) 'var) (null? (caddar body))) (find-class-fields name (cdr body) (add-to-frame (cadar body) 'novalue state)))
-      ((eq? (caar body) 'var) (find-class-fields name (cdr body) (add-to-frame (cadar body) (caddar body) state)))
-      (else (find-class-fields name (cdr body) state)))))
+      ((null? body) frame)
+      ((and (eq? (caaar body) 'var) (null? (val-of-var body))) (find-class-fields name (cdr body) (add-to-frame (caadar body) 'novalue frame)))
+      ((eq? (caaar body) 'var) (find-class-fields name (cdr body) (add-to-frame (caadar body) (val-of-var body) frame)))
+      (else (find-class-fields name (cdr body) frame)))))
+
+(define val-of-var
+  (lambda (statement)
+      (caddr (caar statement))))
 
 ; Creates a class closure which holds the super class, methods, and instance fields of a class
 (define create-class-closure
-  (lambda (name parent body state return break continue throw)
+  (lambda (name parent body return break continue throw)
     (cond
-      ((null? parent) (list (list '() (find-class-fields name body state)) (find-class-methods name body state return break continue throw)))
-      (else (list (list parent (find-class-fields name body state)) (find-class-methods name body state return break continue throw))))))
+      ((null? parent) (cons '() (list (find-class-fields name body (newframe)) (find-class-methods name body (newenvironment) return break continue throw))))
+      (else (cons parent (list (find-class-fields name body (newframe)) (find-class-methods name body (newenvironment) return break continue throw)))))))
 
 
 ; Creates an instance closure which holds the type at runtime and the instance field values
@@ -465,6 +491,11 @@
 ; Environment/State Functions
 ;------------------------
 
+; creates a new world that holds all the classes
+(define newworld
+  (lambda ()
+    '(() ())))
+
 ; create a new empty environment
 (define newenvironment
   (lambda
@@ -526,6 +557,10 @@
           (myerror "error: variable without an assigned value:" var)
           value))))
 
+(define lookup-env
+  (lambda (name world)
+    (caddr (lookup-in-frame name world))))
+
 ; Return the value bound to a variable in the environment
 (define lookup-in-env
   (lambda
@@ -579,6 +614,11 @@
 (define add-to-frame
   (lambda (var val frame)
     (list (cons var (variables frame)) (cons (box (scheme->language val)) (store frame)))))
+
+; Adds the class to a global state
+(define add-to-state
+  (lambda (name closure state)
+    (cons name (car (cons closure (cadr state)))))) 
 
 ; Changes the binding of a variable in the environment to a new value
 (define update-existing
