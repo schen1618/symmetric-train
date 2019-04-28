@@ -26,14 +26,14 @@
                               (lambda (env) (myerror "Break used outside of loop"))
                               (lambda (env) (myerror "Continue used outside of loop"))
                               (lambda (v env) (myerror "Uncaught exception thrown"))))))))
-    
+
 ; Places the classes in class closures and then runs main when there are no more classes
 (define interpret-class-list
   (lambda (statement-list world return break continue throw)
     (cond
       ((null? statement-list) (evaluate-main world return break continue throw))
       (else (interpret-class-list (cdr statement-list) (eval-class (car statement-list) world return break continue throw) return break continue throw)))))
-                                                      
+
 ; Interprets the functions in the global environment and stores them in the bottom layer
 (define interpret-functions-global-list
   (lambda
@@ -366,14 +366,14 @@
   (lambda (type world environment throw)
     (cond
       ((null? type) ('error "No new type"))
-      (else (cons (lookup-in-env type environment) (cadr (lookup-in-env type environment))))))) 
+      (else (cons (lookup-in-env type environment) (cadr (lookup-in-env type environment)))))))
 
 ; Creates an instance closure which holds the type at runtime and the instance field values
 (define create-instance-closure
   (lambda (name state)
     (cons (lookup name state) (cadr (lookup name state)))))
 
-                                                     
+
 
 
 ; Evaluates all possible boolean and arithmetic expressions, including constants and variables.
@@ -397,7 +397,7 @@
     (cond
       ((eq? '! (operator expr)) (not (eval-expression (operand1 expr) world environment throw)))
       ((and (eq? '- (operator expr)) (= 2 (length expr))) (- (eval-expression (operand1 expr) world environment throw)))
-      ((eq? 'new (operator expr)) (interpret-new (cdr expr) world environment throw)) 
+      ((eq? 'new (operator expr)) (interpret-new (cdr expr) world environment throw))
       (else (eval-binary-op2 expr (eval-expression (operand1 expr) world environment throw) world environment throw)))))
 
 ; Complete the evaluation of the binary operator by evaluating the second operand and performing the operation.
@@ -561,7 +561,7 @@
   (lambda
       (var environment)
     (lookup-variable var environment)))
- 
+
 ; A helper function that does the lookup.  Returns an error if the variable does not have a legal value
 (define lookup-variable
   (lambda
@@ -632,7 +632,7 @@
 ; Adds the class to a global state
 (define add-to-state
   (lambda (name closure state)
-    (cons name (car (cons closure (cadr state)))))) 
+    (cons name (car (cons closure (cadr state))))))
 
 ; Changes the binding of a variable in the environment to a new value
 (define update-existing
