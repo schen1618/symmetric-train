@@ -1,11 +1,10 @@
-; If you are using scheme instead of racket, comment these two lines, uncomment the (load "simpleParser.scm") and comment the (require "simpleParser.rkt")
 #lang racket
 (require "classParser.rkt")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Sherry Chen and Chris Toomey
-;; EECS 345 Interpreter Part 3
+;; EECS 345 Interpreter Part 4
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -28,7 +27,7 @@
                               (lambda (env) (myerror "Continue used outside of loop"))
                               (lambda (v env) (myerror "Uncaught exception thrown"))))))))
     
-
+; Places the classes in class closures and then runs main when there are no more classes
 (define interpret-class-list
   (lambda (statement-list world return break continue throw)
     (cond
@@ -68,11 +67,12 @@
                                                                    (find-main-env world return break continue throw)
                                                                    return break continue throw)))
 
+;; Helper function to find the environment of the main method
 (define find-main-env
   (lambda (world return break continue throw)
     (cond
       ((null? (car world)) ('error "No main method found"))
-      ((eq?  (caaar (caddr (lookup-in-class-closure (caar world) world))) 'main) (push-frame (caddr (lookup-in-class-closure (caar world) world))))
+      ((eq?  (caaar (caddr (lookup-in-world (caar world) world))) 'main) (push-frame (caddr (lookup-in-world (caar world) world))))
       (else (find-main (cdar world) return break continue throw)))))
 
 
@@ -160,7 +160,6 @@
   (lambda
       (statement environment return break continue throw)
     (cond
-      ((eq? 'new (statement-type statement)) (create-instance-closure (cadr statement) environment))
       ((eq? 'return (statement-type statement)) (interpret-return statement environment return throw))
       ((eq? 'var (statement-type statement)) (interpret-declare statement environment throw))
       ((eq? '= (statement-type statement)) (interpret-assign statement environment throw))
@@ -176,8 +175,10 @@
                                                                             (bind-arguments (get-parameters (lookup (function-name (without-function-identifier statement)) environment))
                                                                                                            (parameters (without-function-identifier statement)) (push-frame environment) throw)
                                                                             return break continue throw))
+      ((eq? 'new (statement-type) statement) (interpret-new (without-new-identifier) statement environment return break continue throw))
       (else (myerror "Unknown statement:" (statement-type statement))))))
 
+(define without-new-identifier cdr)
 (define without-function-identifier cdr)
 (define function-name car)
 (define get-parameters car)
@@ -247,7 +248,7 @@
 ; Interpret a try-catch-finally block
 
 ; Create a continuation for the throw.  If there is no catch, it has to interpret the finally block, and once that completes throw the exception.
-;   Otherwise, it interprets the catch block with the exception bound to the thrown value and interprets the finally block when the catch is done
+; Otherwise, it interprets the catch block with the exception bound to the thrown value and interprets the finally block when the catch is done
 (define create-throw-catch-continuation
   (lambda
       (catch-statement environment return break continue throw jump finally-block)
@@ -297,15 +298,17 @@
       ((not (eq? (statement-type finally-statement) 'finally)) (myerror "Incorrectly formatted finally block"))
       (else (cons 'begin (cadr finally-statement))))))
 
-(define lookup-in-class-closure
+; Looks up the class closure for a given class name
+(define lookup-in-world
   (lambda (name world)
-    (lookup-in-frame name (car world))))
+    (lookup-in-frame name world)))
 
+; Find the main method in the world
 (define find-main
   (lambda (world return break continue throw)
     (cond
       ((null? (car world)) ('error "No main method found"))
-      ((eq?  (caaar (caddr (lookup-in-class-closure (caar world) world))) 'main) (lookup-in-env (caaar (caddr (lookup-in-class-closure (caar world) world))) (caddr (lookup-in-class-closure (caar world) world))))
+      ((eq?  (caaar (caddr (lookup-in-world (caar world) world))) 'main) (lookup-in-env (caaar (caddr (lookup-in-world (caar world) world))) (caddr (lookup-in-world (caar world) world))))
       (else (find-main (cdar world) return break continue throw)))))
 
 ; Evaluates the classes from class list
@@ -357,6 +360,11 @@
       ((null? parent) (cons '() (list (find-class-fields name body (newframe)) (find-class-methods name body (newenvironment) return break continue throw))))
       (else (cons parent (list (find-class-fields name body (newframe)) (find-class-methods name body (newenvironment) return break continue throw)))))))
 
+(define interpret-new
+  (lambda (type environment return break continue throw)
+    (cond
+      ((null? type) ('error "No new type"))
+      (else (cons (lookup-in-env type environment) (cadr (lookup-in-env type environment))))))) 
 
 ; Creates an instance closure which holds the type at runtime and the instance field values
 (define create-instance-closure
@@ -387,6 +395,7 @@
     (cond
       ((eq? '! (operator expr)) (not (eval-expression (operand1 expr) environment throw)))
       ((and (eq? '- (operator expr)) (= 2 (length expr))) (- (eval-expression (operand1 expr) environment throw)))
+      ((eq? 'new (operator expr)) (interpret-new (cdr expr) environment throw)) 
       (else (eval-binary-op2 expr (eval-expression (operand1 expr) environment throw) environment throw)))))
 
 ; Complete the evaluation of the binary operator by evaluating the second operand and performing the operation.
@@ -408,9 +417,11 @@
       ((eq? '|| (operator expr)) (or op1value (eval-expression (operand2 expr) environment throw)))
       ((eq? '&& (operator expr)) (and op1value (eval-expression (operand2 expr) environment throw)))
       ((eq? 'funcall (operator expr)) (interpret-funcall (statement-without-funcall expr) environment throw))
+      ((eq? 'new (operator expr)) (interpret-new (statement-without-new expr) environment throw))
       (else (myerror "Unknown operator:" (operator expr))))))
 
 (define statement-without-funcall cdr)
+(define statement-without-new cdr)
 
 ;; Determines if two values are equal.  We need a special test because there are both boolean and integer types.
 (define isequal
@@ -495,7 +506,7 @@
 ; creates a new world that holds all the classes
 (define newworld
   (lambda ()
-    '((() ()) ())))
+    '(() ())))
 
 ; create a new empty environment
 (define newenvironment
