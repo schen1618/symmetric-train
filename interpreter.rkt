@@ -72,7 +72,7 @@
   (lambda (world return break continue throw)
     (cond
       ((null? (car world)) ('error "No main method found"))
-      ((eq?  (caaar (caddr (lookup-in-world (caar world) world))) 'main) (begin (push-frame (caddr (lookup-in-world (caar world) world))) world))
+      ((eq?  (caaar (caddr (lookup-in-class-closure (caar world) world))) 'main) (push-frame (caddr (lookup-in-class-closure (caar world) world))))
       (else (find-main (cdar world) return break continue throw)))))
 
 
@@ -160,6 +160,7 @@
   (lambda
       (statement environment return break continue throw)
     (cond
+      ((eq? 'new (statement-type statement)) (create-instance-closure (cadr statement) environment))
       ((eq? 'return (statement-type statement)) (interpret-return statement environment return throw))
       ((eq? 'var (statement-type statement)) (interpret-declare statement environment throw))
       ((eq? '= (statement-type statement)) (interpret-assign statement environment throw))
@@ -193,9 +194,9 @@
 (define interpret-declare
   (lambda
       (statement environment throw)
-    (if (exists-declare-value? statement)
-        (insert (get-declare-var statement) (eval-expression (get-declare-value statement) environment throw) environment)
-        (insert (get-declare-var statement) 'novalue environment))))
+    (cond
+      ((exists-declare-value? statement) (insert (get-declare-var statement) (eval-expression (get-declare-value statement) environment throw) environment))
+      (else (insert (get-declare-var statement) 'novalue environment)))))
 
 ; Updates the environment to add an new binding for a variable
 (define interpret-assign
@@ -296,15 +297,15 @@
       ((not (eq? (statement-type finally-statement) 'finally)) (myerror "Incorrectly formatted finally block"))
       (else (cons 'begin (cadr finally-statement))))))
 
-(define lookup-in-world
+(define lookup-in-class-closure
   (lambda (name world)
-    (lookup-in-frame name world)))
+    (lookup-in-frame name (car world))))
 
 (define find-main
   (lambda (world return break continue throw)
     (cond
       ((null? (car world)) ('error "No main method found"))
-      ((eq?  (caaar (caddr (lookup-in-world (caar world) world))) 'main) (lookup-in-env (caaar (caddr (lookup-in-world (caar world) world))) (caddr (lookup-in-world (caar world) world))))
+      ((eq?  (caaar (caddr (lookup-in-class-closure (caar world) world))) 'main) (lookup-in-env (caaar (caddr (lookup-in-class-closure (caar world) world))) (caddr (lookup-in-class-closure (caar world) world))))
       (else (find-main (cdar world) return break continue throw)))))
 
 ; Evaluates the classes from class list
@@ -360,7 +361,7 @@
 ; Creates an instance closure which holds the type at runtime and the instance field values
 (define create-instance-closure
   (lambda (name state)
-    (list (lookup name state) (cadr (lookup name state)))))
+    (cons (lookup name state) (cadr (lookup name state)))))
 
                                                      
 
@@ -494,7 +495,7 @@
 ; creates a new world that holds all the classes
 (define newworld
   (lambda ()
-    '(() ())))
+    '((() ()) ())))
 
 ; create a new empty environment
 (define newenvironment
