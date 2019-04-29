@@ -394,11 +394,11 @@
 (define instance-field-values cadr)
 
 (define interpret-dot
-  (lambda (statement class environment)
+  (lambda (statement environment)
     (cond
-      ((null? (cadr statement)) ('error "No type"))
-      ((null? (caddr statement)) ('error "No variable/method"))
-      (else (lookup-in-env (caddr statement) environment)))))
+      ((null? (car statement)) ('error "No type"))
+      ((null? (cadr statement)) ('error "No variable/method"))
+      (else (lookup-in-env (car statement) environment)))))
 
 ; Evaluates all possible boolean and arithmetic expressions, including constants and variables.
 (define eval-expression
