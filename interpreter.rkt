@@ -159,21 +159,21 @@
 ; Interpret a statement in the environment with continuations for return, break, continue, throw
 (define interpret-statement
   (lambda
-      (statement class environment return break continue throw)
+      (statement class world environment return break continue throw)
     (cond
-      ((eq? 'return (statement-type statement)) (interpret-return statement class environment return throw))
-      ((eq? 'var (statement-type statement)) (interpret-declare statement class environment throw))
-      ((eq? '= (statement-type statement)) (interpret-assign statement class environment throw))
-      ((eq? 'if (statement-type statement)) (interpret-if statement class environment return break continue throw))
-      ((eq? 'while (statement-type statement)) (interpret-while statement class environment return throw))
+      ((eq? 'return (statement-type statement)) (interpret-return statement class world environment return throw))
+      ((eq? 'var (statement-type statement)) (interpret-declare statement class world environment throw))
+      ((eq? '= (statement-type statement)) (interpret-assign statement class world environment throw))
+      ((eq? 'if (statement-type statement)) (interpret-if statement class world environment return break continue throw))
+      ((eq? 'while (statement-type statement)) (interpret-while statement class world environment return throw))
       ((eq? 'continue (statement-type statement)) (continue environment))
       ((eq? 'break (statement-type statement)) (break environment))
-      ((eq? 'begin (statement-type statement)) (interpret-block statement class environment return break continue throw))
-      ((eq? 'throw (statement-type statement)) (interpret-throw statement class environment throw))
-      ((eq? 'try (statement-type statement)) (interpret-try statement class environment return break continue throw))
-      ((eq? 'function (statement-type statement)) (interpret-function (without-function-identifier statement) class environment return break continue throw))
+      ((eq? 'begin (statement-type statement)) (interpret-block statement class world environment return break continue throw))
+      ((eq? 'throw (statement-type statement)) (interpret-throw statement class world environment throw))
+      ((eq? 'try (statement-type statement)) (interpret-try statement class world environment return break continue throw))
+      ((eq? 'function (statement-type statement)) (interpret-function (without-function-identifier statement) class world environment return break continue throw))
       ((eq? 'funcall (statement-type statement)) (create-funcall-environment (function-statement-list (lookup (function-name (without-function-identifier statement)) environment))
-                                                                             class
+                                                                             class world
                                                                              (bind-arguments (get-parameters (lookup (function-name (without-function-identifier statement)) environment))
                                                                                                            (parameters (without-function-identifier statement)) (push-frame environment) throw)
                                                                             return break continue throw))
@@ -188,41 +188,41 @@
 ; Calls the return continuation with the given expression value
 (define interpret-return
   (lambda
-      (statement class environment return throw)
-    (return (eval-expression (get-expr statement) class environment throw))))
+      (statement class world environment return throw)
+    (return (eval-expression (get-expr statement) class world environment throw))))
 
 ; Adds a new variable binding to the environment.  There may be an assignment with the variable
 (define interpret-declare
   (lambda
-      (statement class environment throw)
+      (statement class world environment throw)
     (cond
-      ((exists-declare-value? statement) (insert (get-declare-var statement) (eval-expression (get-declare-value statement) class environment throw) environment))
+      ((exists-declare-value? statement) (insert (get-declare-var statement) (eval-expression (get-declare-value statement) class world environment throw) environment))
       (else (insert (get-declare-var statement) 'novalue environment)))))
 
 ; Updates the environment to add an new binding for a variable
 (define interpret-assign
   (lambda
-      (statement class environment throw)
-    (update (get-assign-lhs statement) (eval-expression (get-assign-rhs statement) class environment throw) environment)))
+      (statement class world environment throw)
+    (update (get-assign-lhs statement) (eval-expression (get-assign-rhs statement) class world environment throw) environment)))
 
 ; We need to check if there is an else condition.  Otherwise, we evaluate the expression and do the right thing.
 (define interpret-if
   (lambda
-      (statement class environment return break continue throw)
+      (statement class world environment return break continue throw)
     (cond
-      ((eval-expression (get-condition statement) class environment throw) (interpret-statement (get-then statement) class environment return break continue throw))
-      ((exists-else? statement) (interpret-statement (get-else statement) class environment return break continue throw))
+      ((eval-expression (get-condition statement) class world environment throw) (interpret-statement (get-then statement) class world environment return break continue throw))
+      ((exists-else? statement) (interpret-statement (get-else statement) class world environment return break continue throw))
       (else environment))))
 
 ; Interprets a while loop.  We must create break and continue continuations for this loop
 (define interpret-while
   (lambda
-      (statement class environment return throw)
+      (statement class world environment return throw)
     (call/cc
      (lambda (break)
        (letrec ((loop (lambda (condition body environment)
-                        (if (eval-expression condition class environment throw)
-                            (loop condition body (interpret-statement body class environment return break (lambda
+                        (if (eval-expression condition class world environment throw)
+                            (loop condition body (interpret-statement body class world environment return break (lambda
                                                                                                         (env)
                                                                                                       (break (loop condition body env))) throw))
                          environment))))
@@ -231,9 +231,9 @@
 ; Interprets a block.  The break, continue, and throw continuations must be adjusted to pop the environment
 (define interpret-block
   (lambda
-      (statement class environment return break continue throw)
-    (pop-frame (interpret-statement-list (cdr statement)
-                                         class
+      (statement class world environment return break continue throw)
+    (pop-frame (interpret-statement-list (cdr statement)inte
+                                         class world
                                          (push-frame environment)
                                          return
                                          (lambda (env) (break (pop-frame env)))
@@ -243,8 +243,8 @@
 ; We use a continuation to throw the proper value. Because we are not using boxes, the environment/state must be thrown as well so any environment changes will be kept
 (define interpret-throw
   (lambda
-      (statement class environment throw)
-    (throw (eval-expression (get-expr statement) class environment throw) environment)))
+      (statement class world environment throw)
+    (throw (eval-expression (get-expr statement) class world environment throw) environment)))
 
 ; Interpret a try-catch-finally block
 
@@ -252,7 +252,7 @@
 ; Otherwise, it interprets the catch block with the exception bound to the thrown value and interprets the finally block when the catch is done
 (define create-throw-catch-continuation
   (lambda
-      (catch-statement class environment return break continue throw jump finally-block)
+      (catch-statement class world environment return break continue throw jump finally-block)
     (cond
       ((null? catch-statement) (lambda (ex env)
                                  (throw ex (interpret-block finally-block env return break continue throw))))
@@ -261,7 +261,7 @@
               (jump (interpret-block finally-block
                                      (pop-frame (interpret-statement-list
                                                  (get-body catch-statement)
-                                                 class
+                                                 class world
                                                  (insert (catch-var catch-statement) ex (push-frame env))
                                                  return
                                                  (lambda (env2) (break (pop-frame env2)))
@@ -273,7 +273,7 @@
 ;  We must create a new throw continuation and then interpret the try block with the new continuations followed by the finally block with the old continuations
 (define interpret-try
   (lambda
-      (statement class environment return break continue throw)
+      (statement class world environment return break continue throw)
     (call/cc
      (lambda (jump)
        (let* ((finally-block (make-finally-block (get-finally statement)))
