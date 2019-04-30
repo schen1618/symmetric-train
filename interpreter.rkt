@@ -433,8 +433,12 @@
     (cond
       ((null? (car statement)) ('error "No type"))
       ((null? (cadr statement)) ('error "No variable/method"))
+<<<<<<< HEAD
       ((eq? (car statement) 'this) (eval-expression (cadr statement) class world (cdr (pop-frame environment)) throw))
       (else (eval-expression (cadr statement) class world (cons (cadr (lookup-in-env (car statement) environment)) environment) throw)))))
+=======
+      (else (eval-expression (cadr statement) class world (append (lookup-in-env (car statement) environment) environment) throw)))))
+>>>>>>> 0d9562e5b83fa5cd388be04798c05753ed9d2f02
 
 (define find-function-in-world
   (lambda (name list environment world throw)
