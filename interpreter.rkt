@@ -27,44 +27,137 @@
                               (lambda (env) (myerror "Continue used outside of loop"))
                               (lambda (v env) (myerror "Uncaught exception thrown"))))))))
 
-(define breakOutsideLoopError
-  (lambda (env) (myerror "Break used outside loop")))
-
-(define continueOutsideLoopError
-  (lambda (env) (myerror "Continue used outside of loop")))
-
-(define uncaughtExceptionThrownError
-  (lambda (v env) (myerror "Uncaught exception thrown")))
-
 
 ; Places the classes in class closures and then runs main when there are no more classes
 (define interpret-class-list
   (lambda (statement-list world classname return break continue throw)
     (cond
       ((null? statement-list) (evaluate-main classname world return break continue throw))
-      (else (interpret-class-list (rest-of statement-list) (eval-class (first statement-list) world return break continue throw) classname return break continue throw)))))
+      (else                   (interpret-class-list (rest-of statement-list) (eval-class (first statement-list)
+                                                                                         world return break continue throw)
+                                                    classname return break continue throw)))))
 
-(define first car)
-(define rest-of cdr)
+; Find the main method in the world
+(define find-main
+  (lambda (classname world return break continue throw)
+    (cond
+      ((null? (first-statement world)) ('error "No main method found"))
+      ((eq?                            (main-function-name (main-environment
+                                                            (lookup-in-world classname world))) 'main) (lookup-in-env (main-function-name
+                                                                                                                       (main-environment
+                                                                                                                        (lookup-in-world classname world)))
+                                                                                                                      (main-environment (lookup-in-world (functions-list world) world))))
+      (else                            (find-main classname (cdar world) return break continue throw)))))
 
-; Interprets the functions in the global environment and stores them in the bottom layer
-;;(define interpret-functions-global-list
-  ;;(lambda
-  ;    (statement-list environment world return break continue throw)
-  ;  (cond
-  ;    ((null? statement-list) (evaluate-main environment world return break continue throw))
-  ;    (else                   (interpret-functions-global-list (rest-of-statement-list statement-list)
-  ;                                       (interpret-statement (first-statement statement-list)
-  ;                                                            world environment return break continue throw)
-   ;                                      return break continue throw)))))
+; Evaluates the classes from class list
+(define eval-class
+  (lambda (statement world return break continue throw)
+    (cond
+      ((null? statement)                              world)
+      ((and (null? (super statement))
+            (eq? (class-identifier statement)
+                 'class))                             (add-to-frame (class-name statement) (create-class-closure (class-name statement) null-parent
+                                                                                                         (class-body statement) return break continue throw) world))
+      ((and (eq? (class-identifier statement) 'class)
+            (eq? (extends-identifier statement)
+                 'extends))                           (add-to-frame (class-name statement) (create-class-closure
+                                                                                            (parent statement)
+                                                                                            (class-body statement)
+                                                                                            return break continue throw) world))
+      (else                                           'error "invalid class"))))
+
+; Adds the methods in a class to the class closure
+(define add-class-methods
+  (lambda (name body environment return break continue throw)
+    (cond
+      ((null? (car body))                   environment)
+      ((or (eq? (function-identifier body)
+                'function)
+           (eq? (function-identifier body)
+                'static-function))          (add-class-methods name (rest-of-body body)
+                                                               (interpret-function (function-body body)
+                                                                                   name environment return break continue throw)
+                                                               return break continue throw))
+      (else                                 (add-class-methods name (rest-of-body body) environment return break continue throw)))))
+
+; Finds the fields in a class
+(define add-class-fields
+  (lambda (name body frame)
+    (cond
+      ((null? (first-statement body))             frame)
+      ((and (eq? (variable-identifier body) 'var)
+            (null? (val-of-var body)))            (add-class-fields name (rest-of-body body) (add-to-frame (variable-name body) 'novalue frame)))
+      ((eq? (variable-identifier body) 'var)      (add-class-fields name (rest-of-body body) (add-to-frame (variable-name body) (val-of-var body) frame)))
+      (else                                       (add-class-fields name (rest-of-body body) frame)))))
+
+; Creates a class closure which holds the super class, methods, and instance fields of a class
+(define create-class-closure
+  (lambda (name parent body return break continue throw)
+    (cond
+      ((null? parent) (combine-class-elements '() (list (add-class-fields name body (newframe))
+                                                        (add-class-methods name body (newenvironment) return break continue throw))))
+      (else           (combine-class-elements parent (list (add-class-fields name body (newframe))
+                                                           (add-class-methods name body (newenvironment) return break continue throw)))))))
+
+; If there is a 'new statement, creates a closure of the type and the instance field values
+(define interpret-new
+  (lambda (type world environment throw)
+    (cond
+      ((null? type) ('error "No new type"))
+      (else         (list type (instance-field-values (lookup-in-world type world)))))))
+
+; Evaluates the variable or method of the class to the left of the dot operator
+(define find-dot-instance
+  (lambda (statement class world environment throw)
+    (cond
+      ((null? (class-def statement))      ('error "No instance"))
+      ((null? (var-or-method statement))  ('error "No variable/method"))
+      ((eq? (class-def statement) 'this)  (eval-expression (var-or-method statement)
+                                                           class world (rest-of (pop-frame environment)) throw))
+      ((eq? (class-def statement) 'super) (eval-expression (var-or-method statement)
+                                                           class world (rest-of (pop-frame (pop-frame environment))) throw))
+      (else                               (eval-expression (var-or-method statement)
+                                                           class world (add-environments
+                                                                        (list-of-fields (lookup-in-env (class-def statement) environment))
+                                                                        environment) throw)))))
+
+; Helper to find the function in the world
+(define find-function-in-world
+  (lambda (name list environment world throw)
+    (cond
+      ((null? list)            #f)
+      ((eq? name (first list)) (lookup-in-env name environment))
+      (else                    (find-function-in-world name (rest-of list) environment world throw)))))
+
+; Finds the function in the world
+(define get-function-in-world
+  (lambda (name class world throw)
+    (cond
+      ((null? (first-statement world))                                ('error "No main method found"))
+      ((eq? (find-function-in-world
+             name
+             (first-function (main-environment
+                              (lookup-in-world
+                               (first-class world) world)))
+             (main-environment (lookup-in-world (caar world) world))
+             (first-class world) throw) #f)                           (get-function-in-world name (first-function
+                                                                                                   (main-environment
+                                                                                                    (lookup-in-world (list-of-closures world)
+                                                                                                                     world))) (main-environment
+                                                                                                                               (lookup-in-world
+                                                                                                                                (first-class world) world))
+                                                                                                                              world throw))
+      (else                                                           (find-function-in-world name (first-function
+                                                                                                    (main-environment
+                                                                                                     (lookup-in-world (first-class world) world)))
+                                                                                              (main-environment (lookup-in-world (caar world) world))
+                                                                                              (first-class world) throw)))))
 
 ;; Creates a list of the input function with the name as the variable and the parameters and body as the value
 (define add-function-to-env
   (lambda
       (statement class environment)
     (insert (name statement) (list (params statement) (body statement) class) environment)))
-
-;(cons 'this 
 
 ;; Wrapper for a function that creates the params and list of statements
 (define interpret-function
@@ -78,9 +171,11 @@
 (define evaluate-main
   (lambda
       (classname world return break continue throw)
-    (interpret-statement-list (cadr (find-main classname world return break continue throw)) classname world
+    (interpret-statement-list (main-statement-list (find-main classname world return break continue throw)) classname world
                                                                    (find-main-env classname world)
                                                                    return break continue throw)))
+
+(define main-statement-list cadr)
 
 ;; Helper function to find the environment of the main method
 (define find-main-env
@@ -132,7 +227,14 @@
     (call/cc
      (lambda (function-return)
        (cond
-         ((list? (car funcall)) (interpret-function-statement-list (cadr (get-function-in-world (caddr (function-name funcall)) class world throw)) class world (add-parameters-to-environment (get-parameters (get-function-in-world (caddr (function-name funcall)) class world throw)) (parameters funcall) class world (push-frame (append (lookup (instance-name-to-append funcall) environment) environment)) throw) function-return breakOutsideLoopError continueOutsideLoopError throw))
+         ((list? (car funcall))                (interpret-function-statement-list
+                                                (cadr (get-function-in-world (caddr (function-name funcall)) class world throw))
+                                                class world (add-parameters-to-environment (get-parameters (get-function-in-world
+                                                                                                            (caddr (function-name funcall)) class world throw))
+                                                                                           (parameters funcall) class world
+                                                                                           (push-frame (append (lookup (instance-name-to-append funcall) environment)
+                                                                                                               environment)) throw) function-return
+                                                                                                                                    breakOutsideLoopError continueOutsideLoopError throw))
          ((not (exists? (function-name funcall)
                         environment))          (myerror "Error: function does not exist"))
          
@@ -198,7 +300,19 @@
       ((eq? 'throw (statement-type statement)) (interpret-throw statement class world environment throw))
       ((eq? 'try (statement-type statement)) (interpret-try statement class world environment return break continue throw))
       ((eq? 'function (statement-type statement)) (interpret-function (without-function-identifier statement) class environment return break continue throw))
-      ((and (eq? 'funcall (statement-type statement)) (list? (function-name (statement-without-funcall statement)))) (update (instance-name (statement-without-funcall statement)) (list (car (create-funcall-environment (statement-list-from-function (get-funcall-closure (funcall-dot-operator (statement-without-funcall statement)) environment)) (add-parameters-to-environment (get-parameters (get-funcall-closure (funcall-dot-operator (statement-without-funcall statement)) environment)) (parameters (statement-without-funcall statement)) (push-frame (append (lookup (funcall-instance-field (statement-without-funcall statement)) environment) environment)) throw)
+      ((and (eq? 'funcall (statement-type statement))
+            (list? (function-name (statement-without-funcall statement)))) (update (instance-name (statement-without-funcall statement))
+                                                                                   (list (car (create-funcall-environment (statement-list-from-function
+                                                                                                                           (get-funcall-closure
+                                                                                                                            (funcall-dot-operator
+                                                                                                                             (statement-without-funcall statement))
+                                                                                                                            environment)) (add-parameters-to-environment
+                                                                                                                                           (get-parameters (get-funcall-closure
+                                                                                                                                                            (funcall-dot-operator (statement-without-funcall statement))
+                                                                                                                                                            environment)) (parameters (statement-without-funcall statement))
+                                                                                                                                                                          (push-frame (append (lookup (funcall-instance-field
+                                                                                                                                                                                                       (statement-without-funcall statement)) environment)
+                                                                                                                                                                                              environment)) throw)
                                                                                        return
                                                                                        break continue throw))) environment))
       ((eq? 'funcall (statement-type statement)) (create-funcall-environment (function-statement-list (lookup (function-name (without-function-identifier statement)) environment))
@@ -350,122 +464,6 @@
       ((not (eq? (statement-type finally-statement) 'finally)) (myerror "Incorrectly formatted finally block"))
       (else (cons 'begin (cadr finally-statement))))))
 
-; Looks up the class closure for a given class name
-(define lookup-in-world
-  (lambda (name world)
-    (lookup-in-frame name world)))
-
-; Find the main method in the world
-(define find-main
-  (lambda (classname world return break continue throw)
-    (cond
-      ((null? (first-statement world)) ('error "No main method found"))
-      ((eq?  (main-function-name (main-environment (lookup-in-world classname world))) 'main) (lookup-in-env
-                                                                                               (main-function-name (main-environment
-                                                                                                                    (lookup-in-world classname world)))
-                                                                                               (main-environment (lookup-in-world (functions-list world) world))))
-      (else (find-main classname (cdar world) return break continue throw)))))
-
-(define first-statement car)
-(define main-function-name caaar)
-(define functions-list caar)
-
-; Evaluates the classes from class list
-(define eval-class
-  (lambda (statement world return break continue throw)
-    (cond
-      ((null? statement) world)
-      ((and (null? (super statement)) (eq? (class-identifier statement) 'class)) (add-to-frame (class-name statement) (create-class-closure (class-name statement) '()
-                                                                                         (class-body statement) return break continue throw) world))
-      ((and (eq? (class-identifier statement) 'class) (eq? (extends-identifier statement) 'extends)) (add-to-frame (class-name statement) (create-class-closure
-                                                                                                            (class-name statement)
-                                                                                                            (parent statement)
-                                                                                                            (class-body statement) return break
-                                                                                                                                 continue throw) world))
-      (else 'error "invalid class"))))
-
-(define class-identifier car)
-(define super caddr)
-(define extends-identifier caaddr)
-(define class-name cadr)
-(define class-body cdddr)
-(define parent
-  (lambda (statement)
-  (cadr (caddr statement))))
-
-; Adds the methods in a class to the class closure
-(define add-class-methods
-  (lambda (name body environment return break continue throw)
-    (cond
-      ((null? (car body)) environment)
-      ((or (eq? (function-identifier body) 'function) (eq? (function-identifier body) 'static-function)) (add-class-methods name (list (cdar body))
-                                                                                               (interpret-function (function-body body)
-                                                                                                                   name environment return break continue throw)
-                                                                                               return break continue throw))
-      (else (add-class-methods name (list (cdar body)) environment return break continue throw)))))
-
-(define function-identifier caaar)
-(define rest-of-class cdr)
-(define function-body cdaar)
-
-; Finds the fields in a class
-(define add-class-fields
-  (lambda (name body frame)
-    (cond
-      ((null? (car body)) frame)
-      ((and (eq? (variable-identifier body) 'var) (null? (val-of-var body))) (add-class-fields name (list (cdar body)) (add-to-frame (variable-name body) 'novalue frame)))
-      ((eq? (variable-identifier body) 'var) (add-class-fields name (list (cdar body)) (add-to-frame (variable-name body) (val-of-var body) frame)))
-      (else (add-class-fields name (list (cdar body)) frame)))))
-
-(define variable-identifier caaar)
-(define variable-name cadaar)
-
-(define val-of-var
-  (lambda (statement)
-      (caddr (caar statement))))
-
-; Creates a class closure which holds the super class, methods, and instance fields of a class
-(define create-class-closure
-  (lambda (name parent body return break continue throw)
-    (cond
-      ((null? parent) (combine-class-elements '() (list (add-class-fields name body (newframe)) (add-class-methods name body
-                                                                                                                     (newenvironment) return break continue throw))))
-      (else (combine-class-elements parent (list (add-class-fields name body (newframe)) (add-class-methods name body (newenvironment) return break continue throw)))))))
-
-(define combine-class-elements cons)
-
-; If there is a 'new statement, creates a closure of the type and the instance field values
-(define interpret-new
-  (lambda (type world environment throw)
-    (cond
-      ((null? type) ('error "No new type"))
-      (else (list type (instance-field-values (lookup-in-world type world)))))))
-
-(define instance-field-values cadr)
-
-(define find-dot-instance
-  (lambda (statement class world environment throw)
-    (cond
-      ((null? (car statement)) ('error "No type"))
-      ((null? (cadr statement)) ('error "No variable/method"))
-      ((eq? (car statement) 'this) (eval-expression (cadr statement) class world (cdr (pop-frame environment)) throw))
-      (else (eval-expression (cadr statement) class world (cons (cadr (lookup-in-env (car statement) environment)) environment) throw)))))
-
-(define find-function-in-world
-  (lambda (name list environment world throw)
-    (cond
-      ((null? list) #f)
-      ((eq? name (car list)) (lookup-in-env name environment))
-      (else (find-function-in-world name (cdr list) environment world throw)))))
-
-(define get-function-in-world
-  (lambda (name class world throw)
-    (cond
-      ((null? (first-statement world)) ('error "No main method found"))
-      ((eq? (find-function-in-world name (caar (main-environment (lookup-in-world (caar world) world))) (main-environment (lookup-in-world (caar world) world)) (caar world) throw) #f) (get-function-in-world name (caar (main-environment (lookup-in-world (cdar world) world))) (main-environment (lookup-in-world (caar world) world)) world throw))
-      (else (find-function-in-world name (caar (main-environment (lookup-in-world (caar world) world))) (main-environment (lookup-in-world (caar world) world)) (caar world) throw)))))
-
-
 ; Evaluates all possible boolean and arithmetic expressions, including constants and variables.
 (define eval-expression
   (lambda
@@ -592,6 +590,47 @@
       (catch-statement)
     (car (operand1 catch-statement))))
 
+; these helper functions define the parts of the various class types
+(define class-def car)
+(define var-or-method cadr)
+(define list-of-fields cadr)
+(define add-environments cons)
+(define combine-class-elements cons)
+(define variable-identifier caaar)
+(define variable-name cadaar)
+(define val-of-var
+  (lambda (statement)
+      (caddr (caar statement))))
+(define function-identifier caaar)
+(define rest-of-class cdr)
+(define function-body cdaar)
+(define rest-of-body
+  (lambda (body)
+    (list (cdar body))))
+(define class-identifier car)
+(define super caddr)
+(define extends-identifier caaddr)
+(define class-name cadr)
+(define class-body cdddr)
+(define parent
+  (lambda (statement)
+  (cadr (caddr statement))))
+(define null-parent '())
+(define breakOutsideLoopError
+  (lambda (env) (myerror "Break used outside loop")))
+(define continueOutsideLoopError
+  (lambda (env) (myerror "Continue used outside of loop")))
+(define uncaughtExceptionThrownError
+  (lambda (v env) (myerror "Uncaught exception thrown")))
+(define first car)
+(define rest-of cdr)
+(define first-statement car)
+(define main-function-name caaar)
+(define functions-list caar)
+(define first-function caar)
+(define first-class caar)
+(define list-of-closures cdar)
+(define instance-field-values cadr)
 
 ;------------------------
 ; Environment/State Functions
@@ -682,6 +721,11 @@
     (cond
       ((not (exists-in-list? var (variables frame))) (myerror "error: undefined variable" var))
       (else (language->scheme (unbox (get-value (indexof var (variables frame)) (store frame))))))))
+
+; Looks up the class closure for a given class name
+(define lookup-in-world
+  (lambda (name world)
+    (lookup-in-frame name world)))
 
 ; Get the location of a name in a list of names
 (define indexof
