@@ -348,12 +348,12 @@
 (define add-class-methods
   (lambda (name body environment return break continue throw)
     (cond
-      ((null? body) environment)
-      ((or (eq? (function-identifier body) 'function) (eq? (function-identifier body) 'static-function)) (add-class-methods name (rest-of-class body)
+      ((null? (car body)) environment)
+      ((or (eq? (function-identifier body) 'function) (eq? (function-identifier body) 'static-function)) (add-class-methods name (list (cdar body))
                                                                                                (interpret-function (function-body body)
                                                                                                                    name environment return break continue throw)
                                                                                                return break continue throw))
-      (else (add-class-methods name (rest-of-class body) environment return break continue throw)))))
+      (else (add-class-methods name (list (cdar body)) environment return break continue throw)))))
 
 (define function-identifier caaar)
 (define rest-of-class cdr)
@@ -363,13 +363,13 @@
 (define add-class-fields
   (lambda (name body frame)
     (cond
-      ((null? body) frame)
-      ((and (eq? (variable-identifier body) 'var) (null? (val-of-var body))) (add-class-fields name (rest-of-class body) (add-to-frame (variable-name body) 'novalue frame)))
-      ((eq? (variable-identifier body) 'var) (add-class-fields name (rest-of-class body) (add-to-frame (variable-name body) (val-of-var body) frame)))
-      (else (add-class-fields name (rest-of-class body) frame)))))
+      ((null? (car body)) frame)
+      ((and (eq? (variable-identifier body) 'var) (null? (val-of-var body))) (add-class-fields name (list (cdar body)) (add-to-frame (variable-name body) 'novalue frame)))
+      ((eq? (variable-identifier body) 'var) (add-class-fields name (list (cdar body)) (add-to-frame (variable-name body) (val-of-var body) frame)))
+      (else (add-class-fields name (list (cdar body)) frame)))))
 
 (define variable-identifier caaar)
-(define variable-name caadar)
+(define variable-name cadaar)
 
 (define val-of-var
   (lambda (statement)
@@ -399,7 +399,7 @@
     (cond
       ((null? (car statement)) ('error "No type"))
       ((null? (cadr statement)) ('error "No variable/method"))
-      (else (eval-expression (cadr statement) (append (lookup-in-env (car statement) environment) environment) throw)))))
+      (else (eval-expression (cadr statement) class world (append (lookup-in-env (car statement) environment) environment) throw)))))
 
 (define find-function-in-world
   (lambda (name class world throw)
