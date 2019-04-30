@@ -26,7 +26,17 @@
                               (lambda (env) (myerror "Break used outside of loop"))
                               (lambda (env) (myerror "Continue used outside of loop"))
                               (lambda (v env) (myerror "Uncaught exception thrown"))))))))
-    
+
+(define breakOutsideLoopError
+  (lambda (env) (myerror "Break used outside loop")))
+
+(define continueOutsideLoopError
+  (lambda (env) (myerror "Continue used outside of loop")))
+
+(define uncaughtExceptionThrownError
+  (lambda (v env) (myerror "Uncaught exception thrown")))
+
+
 ; Places the classes in class closures and then runs main when there are no more classes
 (define interpret-class-list
   (lambda (statement-list world classname return break continue throw)
@@ -90,6 +100,16 @@
                                                                                                          (pop-frame environment) throw)
                                                                                         environment) throw)))))
 
+; adds the given parameters to the givene environment
+(define add-parameters-to-environment
+  (lambda (param-names param-values environment throw)
+    (cond
+      ((null? param-names) environment)
+      ((not (eq? (length param-names) (length param-values))) (myerror "Mismatching parameters and arguments"))
+      ((list? param-names) (add-parameters-to-environment (parameters param-names) (parameters param-values) (insert (first param-names) (eval-expression (first param-values) (pop-frame environment) throw) environment) throw))
+      (else (insert param-names (eval-expression param-values (pop-frame environment)) environment)))))
+
+
 ;; Finds the parameters of an input function
 (define find-params
   (lambda
@@ -120,6 +140,7 @@
     (call/cc
      (lambda (function-return)
        (cond
+         ((list? (car funcall)) (interpret-function-statement-list (statement-list-of-function (find-function-in-world (function-name funcall) class world throw)) class world (add-parameters-to-environment (car (find-function-in-world (function-name funcall) class world throw)) (cdr funcall) (push-frame (append (lookup (cadar funcall) environment) environment)) throw) function-return breakOutsideLoopError continueOutsideLoopError throw))
          ((not (exists? (function-name funcall)
                         environment))          (myerror "Error: function does not exist"))
          
@@ -131,6 +152,8 @@
                                                                                                   (parameters funcall) (push-frame environment)
                                                                                                   throw) function-return breakError
                                                                                                          continueError throw)))))))
+
+
 
 ;; Returns the environment after a function is evaluated
 (define create-funcall-environment
@@ -394,7 +417,7 @@
 
 (define instance-field-values cadr)
 
-(define find-dot-instance
+(define interpret-dot
   (lambda (statement class world environment throw)
     (cond
       ((null? (car statement)) ('error "No type"))
@@ -434,7 +457,7 @@
       ((eq? '! (operator expr)) (not (eval-expression (operand1 expr) class world environment throw)))
       ((and (eq? '- (operator expr)) (= 2 (length expr))) (- (eval-expression (operand1 expr) class world environment throw)))
       ((eq? 'new (operator expr)) (interpret-new (without-new-identifier expr) world environment throw))
-      ((eq? 'dot (operator expr)) (find-dot-instance (without-dot-identifier expr) class world environment throw))
+      ((eq? 'dot (operator expr)) (interpret-dot (without-dot-identifier expr) class world environment throw))
       (else (eval-binary-op2 expr (eval-expression (operand1 expr) class world environment throw) class world environment throw)))))
 
 (define without-dot-identifier cdr)
